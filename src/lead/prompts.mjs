@@ -39,7 +39,7 @@ export async function composeEvaluatorPrompt(run, items, rulesText, wsPath) {
 
   const itemSummaries = items
     .map((item) => {
-      const result = item.resultText ? shortenText(item.resultText, 800) : '(no result captured)';
+      const result = item.resultText ? shortenText(item.resultText, 500) : '(no result captured)';
       const error = item.error || 'none';
       return [
         `--- Subtask ${item.taskIndex + 1}: ${item.label || 'unlabeled'} ---`,
@@ -107,7 +107,12 @@ export function composeWorkerPrompt({ run, item, rulesText, round, previousOutco
     : 'No external CLAUDE.md rules were injected for this run.';
 
   const wsNote = wsPath
-    ? `Shared workspace: ${wsPath}\nYou may read this JSON file to see outputs from other agents in this run.`
+    ? [
+        `Shared workspace: ${wsPath}`,
+        'MANDATORY: Read this file at the START of your session to see what other agents have done.',
+        'When you finish, your result will be automatically written here for the next agents.',
+        'This prevents duplicate work and conflicting changes.',
+      ].join('\n')
     : '';
 
   // Mission briefing — always prepended so workers never lose context after compaction
