@@ -1,0 +1,35 @@
+{
+  "name": "agent-orchestrator-mcp",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Reusable MCP server for orchestrating Codex and Claude CLI agents in isolated worktrees",
+  "scripts": {
+    "start": "node bin/server.mjs",
+    "doctor": "node bin/doctor.mjs",
+    "smoke": "node bin/smoke.mjs",
+    "dashboard": "node bin/dashboard.mjs",
+    "demo:claude": "node bin/demo-claude-batch.mjs",
+    "watch": "node bin/watcher.mjs",
+    "lint": "npx @biomejs/biome check src/ bin/",
+    "lint:fix": "npx @biomejs/biome check --write src/ bin/",
+    "format": "npx @biomejs/biome format --write src/ bin/",
+    "check": "npx @biomejs/biome check src/ bin/",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*.mjs": "npx @biomejs/biome check --write"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.9",
+    "lint-staged": "^16.4.0",
+    "simple-git-hooks": "^2.13.1"
+  }
+}

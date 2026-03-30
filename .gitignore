@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.db
+*.db-wal
+*.db-shm
+.env
+.playwright-mcp/
+orchestrator-dashboard.png

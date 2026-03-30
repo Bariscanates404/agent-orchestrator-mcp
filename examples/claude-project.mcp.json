@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "agent-orchestrator": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/bariscanates/tbproject/agent-orchestrator-mcp/server.mjs"
+      ],
+      "env": {
+        "TEAMLEAD_REPO_ROOT": "/absolute/path/to/project",
+        "TEAMLEAD_STATE_ROOT": "/Users/bariscanates/.codex/agent-orchestrator"
+      }
+    }
+  }
+}

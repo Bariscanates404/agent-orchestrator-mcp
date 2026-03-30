@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "agent-orchestrator": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/bariscanates/tbproject/agent-orchestrator-mcp/server.mjs"
+      ],
+      "env": {
+        "TEAMLEAD_REPO_ROOT": "${workspaceFolder}",
+        "TEAMLEAD_STATE_ROOT": "${userHome}/.codex/agent-orchestrator"
+      }
+    }
+  }
+}

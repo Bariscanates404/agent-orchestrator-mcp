@@ -1,0 +1,1969 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="theme-color" content="#0f1117"/>
+<meta name="description" content="Agent Orchestrator - AI Task Automation Dashboard"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>%E2%9A%99</text></svg>"/>
+<title>Agent Orchestrator</title>
+<style>
+/* ============================================================
+   CSS DESIGN SYSTEM — Dark Theme
+   ============================================================ */
+:root {
+  --bg-primary:#0f1117;
+  --bg-secondary:#1a1d27;
+  --bg-tertiary:#242836;
+  --bg-elevated:#2a2e3d;
+  --text-primary:#e4e6ef;
+  --text-secondary:#9ca0b0;
+  --text-muted:#6b7085;
+  --border:rgba(255,255,255,0.08);
+  --border-hover:rgba(255,255,255,0.15);
+  --color-completed:#22c55e;
+  --color-failed:#ef4444;
+  --color-running:#3b82f6;
+  --color-planning:#8b5cf6;
+  --color-evaluating:#f59e0b;
+  --color-queued:#6b7085;
+  --color-cancelled:#6b7085;
+  --accent:#6385ff;
+  --accent-hover:#7e9bff;
+  --sidebar-w:220px;
+  --radius:12px;
+  --radius-lg:16px;
+  --radius-sm:8px;
+  --font-mono:'SFMono-Regular',Menlo,'Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--bg-primary);
+  color:var(--text-primary);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  font-size:14px;
+  line-height:1.5;
+  overflow-x:hidden;
+}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px;}
+
+/* ---- Layout ---- */
+.sidebar{
+  position:fixed;top:0;left:0;bottom:0;
+  width:var(--sidebar-w);
+  background:var(--bg-secondary);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  z-index:100;
+  transition:width .2s;
+}
+.sidebar-header{
+  padding:20px 16px 16px;
+  border-bottom:1px solid var(--border);
+}
+.sidebar-logo{
+  font-size:18px;font-weight:700;
+  color:var(--text-primary);
+  display:flex;align-items:center;gap:10px;
+}
+.sidebar-logo svg{width:28px;height:28px;flex-shrink:0;}
+.sidebar-version{font-size:11px;color:var(--text-muted);margin-top:4px;}
+.sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;}
+.nav-item{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;border-radius:var(--radius-sm);
+  color:var(--text-secondary);cursor:pointer;
+  font-size:13px;font-weight:500;
+  transition:all .15s;
+  border:none;background:none;width:100%;text-align:left;
+}
+.nav-item:hover{background:var(--bg-tertiary);color:var(--text-primary);}
+.nav-item.active{background:rgba(99,133,255,0.12);color:var(--accent);}
+.nav-item svg{width:18px;height:18px;flex-shrink:0;opacity:.7;}
+.nav-item.active svg{opacity:1;}
+.sidebar-footer{
+  padding:12px 16px;border-top:1px solid var(--border);
+  font-size:11px;color:var(--text-muted);
+}
+.content{
+  margin-left:var(--sidebar-w);
+  min-height:100vh;
+  padding:24px;
+  transition:margin-left .2s;
+}
+.screen{display:none;}
+.screen.active{display:block;}
+
+/* ---- Common Components ---- */
+.card{
+  background:var(--bg-tertiary);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:16px;
+}
+.card-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:12px;
+}
+.card-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary);}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
+.stat-card{
+  background:var(--bg-tertiary);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:20px;
+  cursor:default;
+  transition:border-color .15s;
+}
+.stat-card:hover{border-color:var(--border-hover);}
+.stat-value{font-size:32px;font-weight:700;line-height:1;}
+.stat-label{font-size:12px;color:var(--text-muted);margin-top:6px;text-transform:uppercase;letter-spacing:.08em;}
+
+/* Buttons */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:var(--radius-sm);
+  font-size:13px;font-weight:500;cursor:pointer;
+  border:1px solid var(--border);
+  background:var(--bg-elevated);color:var(--text-primary);
+  transition:all .15s;
+}
+.btn:hover{border-color:var(--border-hover);background:var(--bg-tertiary);}
+.btn:disabled{opacity:.4;cursor:default;pointer-events:none;}
+.btn-primary{background:var(--accent);color:#fff;border-color:transparent;}
+.btn-primary:hover{background:var(--accent-hover);}
+.btn-danger{background:var(--color-failed);color:#fff;border-color:transparent;}
+.btn-danger:hover{background:#dc2626;}
+.btn-success{background:var(--color-completed);color:#fff;border-color:transparent;}
+.btn-success:hover{background:#16a34a;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-icon{padding:6px 8px;}
+
+/* Action bar */
+.action-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+
+/* Quick actions */
+.quick-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px;}
+.quick-action{
+  background:var(--bg-tertiary);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:16px;
+  cursor:pointer;transition:all .15s;
+  display:flex;flex-direction:column;gap:8px;
+}
+.quick-action:hover{border-color:var(--accent);transform:translateY(-1px);}
+.quick-action-icon{font-size:24px;}
+.quick-action-label{font-size:14px;font-weight:600;}
+.quick-action-desc{font-size:12px;color:var(--text-muted);}
+
+/* Badge */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 10px;border-radius:999px;
+  font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+}
+.badge-planning{background:rgba(139,92,246,.15);color:var(--color-planning);}
+.badge-executing{background:rgba(59,130,246,.15);color:var(--color-running);}
+.badge-evaluating{background:rgba(245,158,11,.15);color:var(--color-evaluating);}
+.badge-completed{background:rgba(34,197,94,.15);color:var(--color-completed);}
+.badge-failed{background:rgba(239,68,68,.15);color:var(--color-failed);}
+.badge-running{background:rgba(59,130,246,.15);color:var(--color-running);}
+.badge-queued{background:rgba(107,112,133,.15);color:var(--color-queued);}
+.badge-cancelled{background:rgba(107,112,133,.15);color:var(--color-cancelled);}
+.badge-preparing{background:rgba(59,130,246,.15);color:var(--color-running);}
+.badge-paused{background:rgba(245,158,11,.18);color:var(--color-evaluating);margin-left:6px;}
+
+/* Split layout */
+.split{display:grid;grid-template-columns:350px minmax(0,1fr);gap:16px;height:calc(100vh - 72px);}
+.split-left{overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
+.split-right{overflow-y:auto;}
+
+/* List items */
+.list-item{
+  background:var(--bg-tertiary);border:1px solid var(--border);
+  border-radius:var(--radius);padding:12px;cursor:pointer;
+  transition:all .15s;
+}
+.list-item:hover{border-color:var(--border-hover);}
+.list-item.selected{border-color:var(--accent);box-shadow:inset 0 0 0 1px rgba(99,133,255,.2);}
+.list-item-head{display:flex;justify-content:space-between;align-items:start;gap:8px;}
+.list-item-title{font-weight:600;font-size:13px;}
+.list-item-meta{font-size:11px;color:var(--text-muted);margin-top:4px;}
+.list-item-summary{font-size:12px;color:var(--text-secondary);margin-top:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;}
+
+/* Filter bar */
+.filter-bar{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);
+}
+.filter-group{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+.filter-btn{
+  padding:6px 12px;font-size:12px;font-weight:500;
+  background:transparent;color:var(--text-secondary);
+  border:none;cursor:pointer;transition:all .15s;
+}
+.filter-btn:hover{background:var(--bg-elevated);}
+.filter-btn.active{background:var(--accent);color:#fff;}
+.filter-search{
+  padding:6px 12px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--bg-elevated);
+  color:var(--text-primary);font-size:12px;width:180px;
+}
+.filter-search::placeholder{color:var(--text-muted);}
+.filter-select{
+  padding:6px 10px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--bg-elevated);
+  color:var(--text-primary);font-size:12px;
+}
+
+/* Detail sections */
+.detail-section{margin-bottom:16px;}
+.detail-section .card{margin-bottom:0;}
+.detail-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.detail-title{font-size:16px;font-weight:700;}
+
+/* Pre / code */
+.pre{
+  margin:0;white-space:pre-wrap;word-break:break-word;
+  font-family:var(--font-mono);font-size:12px;line-height:1.6;
+  color:var(--text-secondary);
+}
+
+/* Events */
+.event-list{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;}
+.event-item{
+  padding:8px 12px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--bg-elevated);
+  font-size:12px;
+}
+.event-item.stdout{border-left:3px solid var(--color-completed);}
+.event-item.stderr{border-left:3px solid var(--color-failed);}
+.event-item.status,.event-item.system{border-left:3px solid var(--accent);}
+.event-meta{font-size:11px;color:var(--text-muted);margin-bottom:4px;}
+
+/* Progress bar */
+.progress{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin:6px 0;}
+.progress-fill{height:100%;border-radius:3px;transition:width .3s;}
+.progress-fill-green{background:var(--color-completed);}
+.progress-fill-blue{background:var(--color-running);}
+.progress-fill-red{background:var(--color-failed);}
+
+/* Activity feed */
+.feed{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;}
+.feed-item{
+  display:flex;gap:12px;align-items:start;
+  padding:10px 12px;border-radius:var(--radius-sm);
+  background:var(--bg-elevated);border:1px solid var(--border);
+  animation:slideIn .3s ease-out;
+}
+.feed-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+.feed-dot-blue{background:var(--color-running);}
+.feed-dot-green{background:var(--color-completed);}
+.feed-dot-red{background:var(--color-failed);}
+.feed-dot-purple{background:var(--color-planning);}
+.feed-dot-orange{background:var(--color-evaluating);}
+.feed-dot-gray{background:var(--color-queued);}
+.feed-content{flex:1;min-width:0;}
+.feed-text{font-size:13px;}
+.feed-time{font-size:11px;color:var(--text-muted);}
+
+/* Worker grid */
+.worker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+.worker-card{
+  background:var(--bg-elevated);border:1px solid var(--border);
+  border-radius:var(--radius);padding:12px;
+  font-size:12px;cursor:pointer;transition:all .15s;
+}
+.worker-card:hover{border-color:var(--accent);}
+.worker-card-label{font-weight:600;font-size:13px;margin-bottom:4px;}
+.worker-card-meta{color:var(--text-muted);font-size:11px;}
+
+/* Modal */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:none;align-items:center;justify-content:center;
+  padding:20px;z-index:1000;backdrop-filter:blur(4px);
+}
+.modal-overlay.open{display:flex;}
+.modal-card{
+  width:min(720px,100%);max-height:85vh;overflow-y:auto;
+  background:var(--bg-secondary);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:24px;
+  box-shadow:0 24px 80px rgba(0,0,0,.4);
+}
+.modal-title{font-size:20px;font-weight:700;margin-bottom:4px;}
+.modal-subtitle{font-size:12px;color:var(--text-muted);margin-bottom:16px;}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
+
+/* Form */
+.form-row{display:flex;gap:12px;margin-bottom:12px;}
+.form-row>label{flex:1;}
+.form-label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px;}
+.form-input,.form-select,.form-textarea{
+  width:100%;padding:8px 12px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--bg-elevated);
+  color:var(--text-primary);font-size:13px;font-family:inherit;
+}
+.form-textarea{min-height:120px;resize:vertical;font-family:var(--font-mono);line-height:1.5;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(99,133,255,.15);
+}
+
+/* Hint text */
+.hint{color:var(--text-muted);font-size:12px;}
+
+/* ============================================================
+   ORCHESTRATION SCREEN
+   ============================================================ */
+/* Pipeline flow */
+.pipeline{display:flex;align-items:center;justify-content:center;gap:0;margin:24px 0;position:relative;}
+.pipeline-node{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:16px 28px;border-radius:var(--radius-lg);
+  border:2px dashed var(--border);background:var(--bg-tertiary);
+  min-width:160px;text-align:center;position:relative;
+  transition:all .3s;
+}
+.pipeline-node-label{font-size:14px;font-weight:700;}
+.pipeline-node-status{font-size:11px;color:var(--text-muted);}
+.pipeline-node.active{border-style:solid;animation:pulseBorder 2s ease-in-out infinite;}
+.pipeline-node.active .pipeline-node-label{color:var(--accent);}
+.pipeline-node.done{border-style:solid;border-color:var(--color-completed);opacity:.8;}
+.pipeline-node.done .pipeline-node-label{color:var(--color-completed);}
+.pipeline-node.planning-color.active{border-color:var(--color-planning);}
+.pipeline-node.planning-color.active .pipeline-node-label{color:var(--color-planning);}
+.pipeline-node.executing-color.active{border-color:var(--color-running);}
+.pipeline-node.executing-color.active .pipeline-node-label{color:var(--color-running);}
+.pipeline-node.evaluating-color.active{border-color:var(--color-evaluating);}
+.pipeline-node.evaluating-color.active .pipeline-node-label{color:var(--color-evaluating);}
+.pipeline-arrow{
+  width:48px;height:2px;background:var(--border);position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+.pipeline-arrow::after{
+  content:'';position:absolute;right:-1px;
+  border:5px solid transparent;border-left-color:var(--text-muted);
+}
+.retry-arrow{
+  position:absolute;bottom:-36px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--color-evaluating);font-weight:600;
+}
+.retry-arrow svg{width:16px;height:16px;}
+
+/* Phase timeline */
+.phase-timeline{
+  display:flex;height:28px;border-radius:var(--radius-sm);overflow:hidden;
+  background:var(--bg-elevated);margin:16px 0;position:relative;
+}
+.phase-segment{
+  height:100%;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:600;color:#fff;
+  transition:width .5s;min-width:0;overflow:hidden;
+}
+.phase-segment-planning{background:var(--color-planning);}
+.phase-segment-executing{background:var(--color-running);}
+.phase-segment-evaluating{background:var(--color-evaluating);}
+.phase-segment.animated{background-size:200% 100%;animation:progressStripe 1.5s linear infinite;}
+
+/* Agent grid */
+.agent-grid{text-align:center;margin:24px 0;}
+.agent-lead{
+  display:inline-flex;flex-direction:column;align-items:center;gap:4px;
+  padding:16px 24px;border-radius:var(--radius-lg);
+  background:var(--bg-tertiary);border:2px solid var(--border);
+  margin-bottom:16px;
+}
+.agent-lead-label{font-size:14px;font-weight:700;}
+.agent-lead-meta{font-size:11px;color:var(--text-muted);}
+.agent-connections{
+  display:flex;justify-content:center;gap:2px;margin-bottom:16px;
+}
+.agent-line{width:2px;height:24px;background:var(--border);}
+.agent-workers{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;}
+.agent-worker{
+  padding:12px 16px;border-radius:var(--radius);
+  background:var(--bg-tertiary);border:2px solid var(--border);
+  min-width:140px;text-align:center;cursor:pointer;transition:all .15s;
+}
+.agent-worker:hover{border-color:var(--accent);}
+.agent-worker.running{border-color:var(--color-running);animation:pulseBorder 2s ease-in-out infinite;}
+.agent-worker.completed{border-color:var(--color-completed);opacity:.7;}
+.agent-worker.failed{border-color:var(--color-failed);}
+.agent-worker.pending{border-style:dashed;opacity:.5;}
+.agent-worker-label{font-size:12px;font-weight:600;}
+.agent-worker-meta{font-size:10px;color:var(--text-muted);margin-top:2px;}
+
+/* Swimlanes */
+.swimlanes{margin:16px 0;}
+.swimlane{
+  display:flex;align-items:center;gap:12px;
+  padding:8px 0;border-bottom:1px solid var(--border);
+}
+.swimlane:last-child{border-bottom:none;}
+.swimlane-label{font-size:12px;font-weight:600;min-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.swimlane-bar{flex:1;height:20px;background:var(--bg-elevated);border-radius:var(--radius-sm);overflow:hidden;position:relative;}
+.swimlane-fill{height:100%;border-radius:var(--radius-sm);transition:width .5s;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff;}
+.swimlane-fill-pending{background:var(--bg-tertiary);width:0%;}
+.swimlane-fill-running{background:var(--color-running);animation:progressStripe 1.5s linear infinite;background-size:200% 100%;}
+.swimlane-fill-completed{background:var(--color-completed);}
+.swimlane-fill-failed{background:var(--color-failed);}
+.swimlane-meta{font-size:11px;color:var(--text-muted);min-width:120px;text-align:right;}
+
+/* Evaluation panel */
+.eval-panel{
+  background:var(--bg-tertiary);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:16px;margin-top:16px;
+}
+.eval-verdict{font-size:18px;font-weight:700;margin-bottom:4px;}
+.eval-verdict-pass{color:var(--color-completed);}
+.eval-verdict-retry{color:var(--color-evaluating);}
+.eval-verdict-fail{color:var(--color-failed);}
+.eval-reason{font-size:13px;color:var(--text-secondary);margin-top:8px;}
+
+/* Settings */
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;}
+.settings-card{
+  background:var(--bg-tertiary);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:20px;
+}
+.settings-card-title{font-size:14px;font-weight:700;margin-bottom:12px;}
+.runtime-info{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);}
+.runtime-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);}
+.runtime-row:last-child{border-bottom:none;}
+.runtime-key{color:var(--text-muted);min-width:100px;}
+.doctor-results{margin-top:12px;}
+.doctor-item{display:flex;gap:8px;align-items:center;padding:6px 0;font-size:13px;}
+.doctor-ok{color:var(--color-completed);}
+.doctor-warn{color:var(--color-evaluating);}
+.doctor-fail{color:var(--color-failed);}
+
+/* ---- Tooltip ---- */
+.tooltip{
+  position:fixed;z-index:2000;
+  background:var(--bg-secondary);border:1px solid var(--border-hover);
+  border-radius:var(--radius-sm);padding:10px 14px;
+  max-width:340px;font-size:12px;line-height:1.5;
+  color:var(--text-secondary);
+  box-shadow:0 8px 30px rgba(0,0,0,.3);
+  pointer-events:none;opacity:0;transition:opacity .15s;
+}
+.tooltip.visible{opacity:1;}
+.tooltip-icon{margin-right:4px;}
+
+/* ---- Animations ---- */
+@keyframes pulseBorder{0%,100%{box-shadow:0 0 0 0 rgba(99,133,255,.3);}50%{box-shadow:0 0 0 6px rgba(99,133,255,0);}}
+@keyframes progressStripe{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+@keyframes slideIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.fade-in{animation:fadeIn .3s ease-out;}
+
+/* ---- FAB ---- */
+.fab{
+  position:fixed;bottom:24px;right:24px;z-index:90;
+  width:52px;height:52px;border-radius:50%;
+  background:var(--accent);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;border:none;font-size:24px;
+  box-shadow:0 4px 20px rgba(99,133,255,.4);
+  transition:transform .15s,box-shadow .15s;
+}
+.fab:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(99,133,255,.5);}
+
+/* ---- Responsive ---- */
+/* Toast notifications */
+.toast-container{position:fixed;top:16px;right:16px;z-index:3000;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{
+  pointer-events:auto;padding:12px 16px;border-radius:var(--radius-sm);
+  background:var(--bg-secondary);border:1px solid var(--border);
+  color:var(--text-primary);font-size:13px;min-width:280px;max-width:400px;
+  box-shadow:0 8px 30px rgba(0,0,0,.4);
+  animation:slideIn .3s ease-out;
+  display:flex;align-items:start;gap:8px;
+}
+.toast-error{border-left:3px solid var(--color-failed);}
+.toast-success{border-left:3px solid var(--color-completed);}
+.toast-warning{border-left:3px solid var(--color-evaluating);}
+.toast-info{border-left:3px solid var(--accent);}
+.toast-close{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:0;margin-left:auto;}
+
+/* Connection indicator */
+.conn-indicator{
+  position:fixed;top:8px;right:8px;z-index:150;
+  display:flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:999px;
+  font-size:11px;font-weight:500;
+  background:var(--bg-secondary);border:1px solid var(--border);
+}
+.conn-dot{width:8px;height:8px;border-radius:50%;}
+.conn-dot-live{background:var(--color-completed);animation:pulseBorder 2s infinite;}
+.conn-dot-dead{background:var(--color-failed);}
+
+/* Last updated */
+.last-updated{font-size:10px;color:var(--text-muted);margin-top:4px;}
+
+/* Plugins page */
+.plugin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+.plugin-card{
+  background:var(--bg-tertiary);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:20px;transition:border-color .15s;
+}
+.plugin-card:hover{border-color:var(--border-hover);}
+.plugin-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.plugin-name{font-size:15px;font-weight:700;}
+.plugin-status{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;}
+.plugin-status-active{background:rgba(34,197,94,.15);color:var(--color-completed);}
+.plugin-status-inactive{background:rgba(107,112,133,.15);color:var(--color-queued);}
+.plugin-desc{font-size:12px;color:var(--text-secondary);margin-bottom:8px;}
+.plugin-meta{font-size:11px;color:var(--text-muted);}
+
+/* Confirm dialog */
+.confirm-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:none;align-items:center;justify-content:center;z-index:2500;
+}
+.confirm-overlay.open{display:flex;}
+.confirm-card{
+  background:var(--bg-secondary);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:24px;max-width:400px;text-align:center;
+}
+.confirm-msg{font-size:14px;margin-bottom:16px;}
+.confirm-actions{display:flex;gap:8px;justify-content:center;}
+
+@media(max-width:960px){
+  .sidebar{width:56px;}
+  .sidebar .nav-item span,.sidebar-header .sidebar-logo span,.sidebar-version,.sidebar-footer{display:none;}
+  .sidebar-header{padding:16px 10px;}
+  .sidebar-nav{padding:12px 4px;}
+  .nav-item{justify-content:center;padding:10px 8px;}
+  .content{margin-left:56px;}
+  .split{grid-template-columns:1fr;height:auto;}
+  .form-row{flex-direction:column;}
+  .pipeline{flex-wrap:wrap;gap:12px;}
+  .pipeline-arrow{width:24px;}
+  .conn-indicator{top:auto;bottom:8px;}
+}
+@media(max-width:600px){
+  .stat-grid{grid-template-columns:1fr 1fr;}
+  .quick-actions{grid-template-columns:1fr 1fr;}
+  .plugin-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     SIDEBAR NAVIGATION
+     ============================================================ -->
+<nav class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      <span>Orchestrator</span>
+    </div>
+    <div class="sidebar-version">Agent Orchestrator MCP</div>
+  </div>
+  <div class="sidebar-nav">
+    <button class="nav-item active" data-screen="overview" data-tip="Genel bak&#305;&#351; ekran&#305;. Sistemin anl&#305;k durumunu, aktif i&#351;&#231;i say&#305;s&#305;n&#305; ve son olaylar&#305; g&#246;rebilirsiniz.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Ana Sayfa</span>
+    </button>
+    <button class="nav-item" data-screen="tasks" data-tip="Tekil g&#246;rev y&#246;netim ekran&#305;. Her i&#351;&#231;i g&#246;revinin detay&#305;n&#305;, loglar&#305;n&#305; ve aksiyonlar&#305;n&#305; burada bulursunuz.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      <span>G&#246;revler</span>
+    </button>
+    <button class="nav-item" data-screen="leads" data-tip="Otonom lider &#231;al&#305;&#351;malar&#305;. Planlama&#8594;&#231;al&#305;&#351;t&#305;rma&#8594;de&#287;erlendirme d&#246;ng&#252;s&#252; y&#246;neten oturumlar&#305; listeler.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      <span>Lider Oturumlar&#305;</span>
+    </button>
+    <button class="nav-item" data-screen="orchestration" data-tip="G&#246;rsel pipeline g&#246;r&#252;n&#252;m&#252;. Bir lider oturumunun ak&#305;&#351;&#305;n&#305; g&#246;rsel olarak takip edin.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Orkestrasyon</span>
+    </button>
+    <button class="nav-item" data-screen="plugins" data-tip="Aktif MCP plugin'leri. Context7, Sequential Thinking, Playwright ve diger plugin'lerin durumunu gorun.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <span>Plugin'ler</span>
+    </button>
+    <button class="nav-item" data-screen="settings" data-tip="Sistem yap&#305;land&#305;rmas&#305;. Lead ve worker backend tercihlerini buradan y&#246;netin.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Ayarlar</span>
+    </button>
+  </div>
+  <div class="sidebar-footer" id="sidebarFooter">Loading...</div>
+</nav>
+
+<!-- ============================================================
+     MAIN CONTENT AREA
+     ============================================================ -->
+<div class="content">
+
+  <!-- SCREEN 1: Overview -->
+  <div class="screen active" id="screen-overview">
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;">Ana Sayfa</h2>
+    <div class="stat-grid" id="overviewStats">
+      <div class="stat-card" data-tip="T&#252;m durumlardan (kuyrukta, &#231;al&#305;&#351;&#305;yor, tamamland&#305;, ba&#351;ar&#305;s&#305;z, iptal) g&#246;revlerin toplam&#305;.">
+        <div class="stat-value" id="statTotalTasks">0</div>
+        <div class="stat-label">Toplam G&#246;rev</div>
+      </div>
+      <div class="stat-card" data-tip="&#350;u anda aktif &#231;al&#305;&#351;an i&#351;&#231;i oturumlar&#305;. Queued, preparing veya running durumundaki g&#246;revler say&#305;l&#305;r.">
+        <div class="stat-value" id="statActiveWorkers">0</div>
+        <div class="stat-label">Aktif &#304;&#351;&#231;iler</div>
+      </div>
+      <div class="stat-card" data-tip="Otonom planlama-&#231;al&#305;&#351;t&#305;rma-de&#287;erlendirme d&#246;ng&#252;s&#252; olan oturumlar&#305;n toplam&#305;.">
+        <div class="stat-value" id="statLeadRuns">0</div>
+        <div class="stat-label">Lider Oturumlar&#305;</div>
+      </div>
+      <div class="stat-card" data-tip="Backend sa&#287;l&#305;k durumu. Claude ve Codex CLI'lar&#305;n&#305;n eri&#351;ilebilirli&#287;ini g&#246;sterir. Sar&#305; ise Doctor &#231;al&#305;&#351;t&#305;r&#305;n." id="statHealthCard">
+        <div class="stat-value" id="statHealth">&#10003;</div>
+        <div class="stat-label">Sistem Sa&#287;l&#305;&#287;&#305;</div>
+      </div>
+    </div>
+    <div class="quick-actions">
+      <div class="quick-action" id="qaNewTask" data-tip="Yeni i&#351;&#231;i g&#246;revi olu&#351;turur. Claude veya Codex backend'inde tek bir g&#246;rev ba&#351;lat&#305;r. &#214;rnek: 'Login bug fix et' &#351;eklinde prompt verin.">
+        <div class="quick-action-icon">&#128736;</div>
+        <div class="quick-action-label">Yeni G&#246;rev</div>
+        <div class="quick-action-desc">Tekil i&#351;&#231;i g&#246;revi ba&#351;lat</div>
+      </div>
+      <div class="quick-action" id="qaNewLead" data-tip="Yeni otonom lider oturumu ba&#351;lat&#305;r. Bir hedef verin, sistem planlay&#305;p &#231;al&#305;&#351;t&#305;rs&#305;n. &#214;rnek: 'Auth mod&#252;l&#252;n&#252; refactor et'.">
+        <div class="quick-action-icon">&#128101;</div>
+        <div class="quick-action-label">Yeni Lead Run</div>
+        <div class="quick-action-desc">Otonom oturum ba&#351;lat</div>
+      </div>
+      <div class="quick-action" id="qaDemo" data-tip="Claude demo batch'i &#231;al&#305;&#351;t&#305;r&#305;r. Test ama&#231;l&#305; k&#252;&#231;&#252;k bir g&#246;rev seti g&#246;nderir. Sistemi ilk kez deniyorsan&#305;z bununla ba&#351;lay&#305;n.">
+        <div class="quick-action-icon">&#9654;</div>
+        <div class="quick-action-label">Demo &#199;al&#305;&#351;t&#305;r</div>
+        <div class="quick-action-desc">Claude demo batch g&#246;nder</div>
+      </div>
+      <div class="quick-action" id="qaDoctor" data-tip="Sistem sa&#287;l&#305;k kontrol&#252; yapar. Backend CLI'lar&#305;, git durumu ve DB yollar&#305;n&#305; kontrol eder. Bir &#351;ey &#231;al&#305;&#351;m&#305;yorsa ilk buna bas&#305;n.">
+        <div class="quick-action-icon">&#9877;</div>
+        <div class="quick-action-label">Doktor</div>
+        <div class="quick-action-desc">Sistem sa&#287;l&#305;k kontrol&#252;</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Son Olaylar</span></div>
+        <div class="feed" id="overviewFeed"><div class="hint">Hen&#252;z olay yok.</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Aktif &#304;&#351;&#231;iler</span></div>
+        <div class="worker-grid" id="overviewWorkers"><div class="hint">Aktif i&#351;&#231;i yok.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: Tasks -->
+  <div class="screen" id="screen-tasks">
+    <div class="filter-bar">
+      <div class="filter-group" id="taskStatusFilter">
+        <button class="filter-btn active" data-status="" data-tip="T&#252;m g&#246;revleri g&#246;sterir, durum filtresi uygulamaz.">T&#252;m&#252;</button>
+        <button class="filter-btn" data-status="running" data-tip="Sadece &#231;al&#305;&#351;an g&#246;revleri filtreler (queued + preparing + running). Anl&#305;k i&#351;&#231;i y&#252;k&#252;n&#252; g&#246;rmek i&#231;in.">&#199;al&#305;&#351;an</button>
+        <button class="filter-btn" data-status="completed" data-tip="Sadece ba&#351;ar&#305;yla biten g&#246;revleri filtreler.">Tamamlanan</button>
+        <button class="filter-btn" data-status="failed" data-tip="Sadece hata ile sonu&#231;lanan g&#246;revleri filtreler. Escalation karar&#305; i&#231;in buraya bak&#305;n.">Ba&#351;ar&#305;s&#305;z</button>
+      </div>
+      <select class="filter-select" id="taskBackendFilter" data-tip="Backend'e g&#246;re filtreler. Claude veya Codex ile &#231;al&#305;&#351;an g&#246;revleri ay&#305;r&#305;r.">
+        <option value="">T&#252;m Backend</option>
+        <option value="claude">Claude</option>
+        <option value="codex">Codex</option>
+      </select>
+      <input class="filter-search" type="text" placeholder="Ara..." id="taskSearch" data-tip="G&#246;rev ad&#305; veya prompt i&#231;eri&#287;inde arama yapar. &#214;rnek: 'login' yaz&#305;n ilgili g&#246;revleri bulun."/>
+      <div style="flex:1;"></div>
+      <button class="btn btn-primary btn-sm" id="taskNewBtn">+ Yeni G&#246;rev</button>
+    </div>
+    <div class="split">
+      <div class="split-left" id="taskListPanel"></div>
+      <div class="split-right" id="taskDetailPanel">
+        <div class="card"><div class="hint">Detay g&#246;rmek i&#231;in sol listeden bir g&#246;rev se&#231;in.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: Lead Runs -->
+  <div class="screen" id="screen-leads">
+    <div class="action-bar">
+      <button class="btn btn-primary" id="leadNewBtn">+ Yeni Lead Run</button>
+      <button class="btn btn-sm" id="leadRefreshBtn">Yenile</button>
+    </div>
+    <div class="split">
+      <div class="split-left" id="leadListPanel"></div>
+      <div class="split-right" id="leadDetailPanel">
+        <div class="card"><div class="hint">Detay g&#246;rmek i&#231;in sol listeden bir oturum se&#231;in.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: Orchestration -->
+  <div class="screen" id="screen-orchestration">
+    <div class="action-bar">
+      <select class="form-select" id="orchRunSelect" style="width:320px;" data-tip="G&#246;rselle&#351;tirilecek lider oturumu se&#231;in. Aktif veya son tamamlanan oturumlar g&#246;sterilir.">
+        <option value="">Lead Run se&#231;in...</option>
+      </select>
+    </div>
+    <div id="orchContent">
+      <div class="card"><div class="hint">G&#246;rselle&#351;tirmek i&#231;in bir Lead Run se&#231;in.</div></div>
+    </div>
+  </div>
+
+  <!-- SCREEN 5: Plugins -->
+  <div class="screen" id="screen-plugins">
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;">Aktif Plugin'ler</h2>
+    <div class="plugin-grid" id="pluginGrid">
+      <div class="hint">Plugin bilgisi yukleniyor...</div>
+    </div>
+  </div>
+
+  <!-- SCREEN 6: Settings -->
+  <div class="screen" id="screen-settings">
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;">Ayarlar</h2>
+    <div class="settings-grid">
+      <div class="settings-card">
+        <div class="settings-card-title">Backend Tercihleri</div>
+        <label>
+          <div class="form-label" data-tip="Lider backend se&#231;imi. Planlama ve de&#287;erlendirme yapan agent'&#305;n kullanaca&#287;&#305; CLI. Codex genellikle daha iyi plan yapar.">Lead Backend</div>
+          <select class="form-select" id="settLeadBackend">
+            <option value="codex">Codex</option>
+            <option value="claude">Claude</option>
+          </select>
+        </label>
+        <label style="display:block;margin-top:12px;">
+          <div class="form-label" data-tip="Varsay&#305;lan i&#351;&#231;i backend'i. G&#246;revde backend belirtilmediyse kullan&#305;l&#305;r. Claude daha ucuz, rutin i&#351;ler i&#231;in ideal.">Worker Backend</div>
+          <select class="form-select" id="settWorkerBackend">
+            <option value="claude">Claude</option>
+            <option value="codex">Codex</option>
+          </select>
+        </label>
+        <label style="display:block;margin-top:12px;">
+          <div class="form-label" data-tip="Codex yedek backend. Codex istendiyse ama kullan&#305;lamazsa ne olsun. &#214;rnek: Claude'a d&#252;&#351;s&#252;n.">Codex Fallback</div>
+          <select class="form-select" id="settCodexFallback">
+            <option value="claude">Claude</option>
+            <option value="codex">Codex</option>
+          </select>
+        </label>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary" id="settSaveBtn" data-tip="Tercihleri kaydeder. SQLite'a yaz&#305;l&#305;r, hemen aktif olur. Sonraki g&#246;revler bu ayarlarla &#231;al&#305;&#351;&#305;r.">Kaydet</button>
+        </div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">Runtime Bilgisi</div>
+        <div class="runtime-info" id="settRuntime">
+          <div class="runtime-row"><span class="runtime-key">Repo Root</span><span id="settRepoRoot">-</span></div>
+          <div class="runtime-row"><span class="runtime-key">State Root</span><span id="settStateRoot">-</span></div>
+          <div class="runtime-row"><span class="runtime-key">DB Path</span><span id="settDbPath">-</span></div>
+        </div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-card-title">Doctor</div>
+        <button class="btn btn-sm" id="settDoctorBtn" data-tip="Sa&#287;l&#305;k kontrol&#252; &#231;al&#305;&#351;t&#305;r&#305;r. Backend CLI'lar&#305;, git durumu ve dizin yap&#305;s&#305;n&#305; kontrol eder.">&#199;al&#305;&#351;t&#305;r</button>
+        <div class="doctor-results" id="settDoctorResults"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .content -->
+
+<!-- ============================================================
+     MODALS
+     ============================================================ -->
+
+<!-- Task Launch Modal -->
+<div class="modal-overlay" id="modalTaskLaunch">
+  <div class="modal-card">
+    <div class="modal-title" id="modalTaskTitle">Yeni G&#246;rev</div>
+    <div class="modal-subtitle" id="modalTaskSubtitle">Claude veya Codex backend'inde yeni i&#351;&#231;i g&#246;revi olu&#351;turun.</div>
+    <div class="form-row">
+      <label>
+        <div class="form-label" data-tip="G&#246;rev etiketi. Kart ve raporlarda g&#246;r&#252;l&#252;r. &#214;rnek: 'fix-login-bug' gibi kebab-case tercih edin.">Label</div>
+        <input class="form-input" id="mTaskLabel" type="text" placeholder="audit-task"/>
+      </label>
+      <label>
+        <div class="form-label" data-tip="G&#246;rev i&#231;in backend se&#231;imi. Bo&#351; b&#305;rak&#305;rsan&#305;z varsay&#305;lan worker backend kullan&#305;l&#305;r.">Backend</div>
+        <select class="form-select" id="mTaskBackend">
+          <option value="">Varsay&#305;lan</option>
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+        </select>
+      </label>
+    </div>
+    <div class="form-row">
+      <label>
+        <div class="form-label" data-tip="Yedek backend. Se&#231;ilen backend kullan&#305;lamazsa bu devreye girer. &#214;rnek: Codex yoksa Claude'a d&#252;&#351;s&#252;n.">Fallback</div>
+        <select class="form-select" id="mTaskFallback">
+          <option value="">Yok</option>
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+        </select>
+      </label>
+      <label>
+        <div class="form-label" data-tip="&#199;al&#305;&#351;ma modu. reuse_repo: mevcut repoda &#231;al&#305;&#351;&#305;r. git_worktree: izole dalda &#231;al&#305;&#351;&#305;r. Paralel g&#246;revlerde git_worktree g&#252;venlidir.">Worktree</div>
+        <select class="form-select" id="mTaskWorktree">
+          <option value="reuse_repo">Reuse repo</option>
+          <option value="git_worktree">Git worktree</option>
+        </select>
+      </label>
+      <label>
+        <div class="form-label" data-tip="Muhakeme derinli&#287;i. High = daha iyi sonu&#231; ama yava&#351; ve pahal&#305;. Basit i&#351;ler i&#231;in low, karma&#351;&#305;k i&#231;in high.">Effort</div>
+        <select class="form-select" id="mTaskEffort">
+          <option value="">Varsay&#305;lan</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="xhigh">XHigh</option>
+        </select>
+      </label>
+    </div>
+    <label>
+      <div class="form-label" id="mTaskPromptLabel" data-tip="&#304;&#351;&#231;i i&#231;in ana talimat. Ne kadar net olursa sonu&#231; o kadar iyi olur. Kapsam ve beklenen &#231;&#305;kt&#305;y&#305; belirtin.">Prompt</div>
+      <textarea class="form-textarea" id="mTaskBody" placeholder="G&#246;revi a&#231;&#305;k&#231;a tan&#305;mlay&#305;n..."></textarea>
+    </label>
+    <div class="modal-actions">
+      <button class="btn" id="mTaskClose">Kapat</button>
+      <button class="btn btn-primary" id="mTaskSubmit">Ba&#351;lat</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lead Launch Modal -->
+<div class="modal-overlay" id="modalLeadLaunch">
+  <div class="modal-card">
+    <div class="modal-title">Yeni Lead Run</div>
+    <div class="modal-subtitle">Bir hedef tan&#305;mlay&#305;n, sistem planlay&#305;p &#231;al&#305;&#351;t&#305;rs&#305;n.</div>
+    <div class="form-row">
+      <label>
+        <div class="form-label">Label</div>
+        <input class="form-input" id="mLeadLabel" type="text" placeholder="refactor-auth"/>
+      </label>
+      <label>
+        <div class="form-label">Worker Backend</div>
+        <select class="form-select" id="mLeadWorkerBackend">
+          <option value="">Varsay&#305;lan</option>
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+        </select>
+      </label>
+    </div>
+    <div class="form-row">
+      <label>
+        <div class="form-label" data-tip="E&#351;li i&#351;&#231;i say&#305;s&#305;. Ayn&#305; anda ka&#231; alt g&#246;rev &#231;al&#305;&#351;t&#305;r&#305;lacak. CPU ve API limitini a&#351;mamak i&#231;in 3-4 ideal.">Max Parallel</div>
+        <select class="form-select" id="mLeadMaxParallel">
+          <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="6">6</option>
+        </select>
+      </label>
+      <label>
+        <div class="form-label" data-tip="Alt g&#246;rev deneme say&#305;s&#305;. Ba&#351;ar&#305;s&#305;z g&#246;revler ka&#231; kez yeniden denenecek. 2 = ilk deneme + 1 retry.">Max Rounds</div>
+        <select class="form-select" id="mLeadMaxRounds">
+          <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>
+        </select>
+      </label>
+      <label>
+        <div class="form-label" data-tip="De&#287;erlendirme d&#246;ng&#252; say&#305;s&#305;. Ka&#231; kez RETRY verebilecek. 0 = de&#287;erlendirme atlan&#305;r.">Max Eval Rounds</div>
+        <select class="form-select" id="mLeadMaxEvalRounds">
+          <option value="0">0 (atla)</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>
+        </select>
+      </label>
+    </div>
+    <label>
+      <div class="form-label" data-tip="Oturum hedefi. Lead agent bu hedefi alt g&#246;revlere ay&#305;racak. 'Neyi ba&#351;armal&#305;y&#305;z' sorusunun cevab&#305; olmal&#305;.">Hedef (Objective)</div>
+      <textarea class="form-textarea" id="mLeadObjective" placeholder="&#220;st d&#252;zey hedefinizi a&#231;&#305;klay&#305;n..."></textarea>
+    </label>
+    <div class="modal-actions">
+      <button class="btn" id="mLeadClose">Kapat</button>
+      <button class="btn btn-primary" id="mLeadSubmit">Ba&#351;lat</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Item Modal -->
+<div class="modal-overlay" id="modalAddItem">
+  <div class="modal-card">
+    <div class="modal-title">Alt G&#246;rev Ekle</div>
+    <div class="modal-subtitle">Lead run'a yeni alt g&#246;rev ekleyin. Sonraki &#231;al&#305;&#351;t&#305;rma d&#246;ng&#252;s&#252;nde i&#351;e al&#305;n&#305;r.</div>
+    <div class="form-row">
+      <label>
+        <div class="form-label">Label</div>
+        <input class="form-input" id="mAddItemLabel" type="text" placeholder="fix-edge-case"/>
+      </label>
+    </div>
+    <label>
+      <div class="form-label">Talimat</div>
+      <textarea class="form-textarea" id="mAddItemInstruction" placeholder="Bu alt g&#246;revin ne yapmas&#305; gerekti&#287;ini a&#231;&#305;klay&#305;n."></textarea>
+    </label>
+    <div class="modal-actions">
+      <button class="btn" id="mAddItemClose">Kapat</button>
+      <button class="btn btn-primary" id="mAddItemSubmit">Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Connection indicator -->
+<div class="conn-indicator" id="connIndicator">
+  <div class="conn-dot conn-dot-dead" id="connDot"></div>
+  <span id="connLabel">Baglaniyor...</span>
+</div>
+
+<!-- Confirm dialog -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-card">
+    <div class="confirm-msg" id="confirmMsg">Emin misiniz?</div>
+    <div class="confirm-actions">
+      <button class="btn" id="confirmNo">Vazgec</button>
+      <button class="btn btn-danger" id="confirmYes">Evet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip element -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+(function(){
+'use strict';
+
+/* ============================================================
+   Constants & State
+   ============================================================ */
+const TERMINAL = new Set(['completed','failed','cancelled']);
+const RUNNING_SET = new Set(['queued','preparing','running']);
+
+const state = {
+  currentScreen: 'overview',
+  dashboard: null,
+  tasks: { filter: { status: '', backend: '', search: '' }, selectedId: null, detail: null, events: [] },
+  leads: { runs: [], selectedId: null, detail: null, items: [], events: [] },
+  orchestration: { selectedRunId: null, run: null, items: [], events: [] },
+  settings: { leadBackend: 'codex', defaultWorkerBackend: 'claude', codexFallbackBackend: 'claude' },
+  doctor: null,
+  streams: { dashboard: null, task: null, lead: null },
+  timers: { taskRefresh: null, leadRefresh: null },
+  _addItemRunId: null,
+  _launchMode: 'new',
+  _escalateTaskId: null,
+};
+
+/* ============================================================
+   Utilities
+   ============================================================ */
+function esc(v) { return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function $(id) { return document.getElementById(id); }
+function request(url, opts={}) {
+  return fetch(url, { headers:{'Content-Type':'application/json'}, ...opts })
+    .then(async r => { const d = await r.json(); if(!r.ok) throw new Error(d.error||'Request failed'); return d; });
+}
+function fmtTime(ts) { if(!ts) return '-'; return new Date(ts).toLocaleTimeString(); }
+function fmtDate(ts) { if(!ts) return '-'; return new Date(ts).toLocaleString(); }
+function fmtAgo(ts) {
+  if(!ts) return '';
+  const s = Math.round((Date.now() - new Date(ts).getTime()) / 1000);
+  if(s < 5) return 'simdi';
+  if(s < 60) return s+'s once';
+  if(s < 3600) return Math.floor(s/60)+'dk once';
+  return Math.floor(s/3600)+'sa once';
+}
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+function safeParse(str) { try { return JSON.parse(str); } catch(e) { console.error('JSON parse error:', e); return null; } }
+
+/* Toast system */
+let toastCount = 0;
+function showToast(msg, type='info', duration=5000) {
+  const id = 'toast-'+(++toastCount);
+  const container = $('toastContainer');
+  const div = document.createElement('div');
+  div.className = 'toast toast-'+type;
+  div.id = id;
+  div.innerHTML = '<span>'+esc(msg)+'</span><button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
+  container.appendChild(div);
+  if(duration > 0) setTimeout(() => { const el = $(id); if(el) el.remove(); }, duration);
+}
+function showError(e) { const m = e?.message||String(e); console.error(m); showToast(m, 'error', 8000); }
+function showSuccess(m) { showToast(m, 'success', 3000); }
+
+/* Confirm dialog */
+let confirmResolve = null;
+function confirm(msg) {
+  return new Promise(resolve => {
+    confirmResolve = resolve;
+    $('confirmMsg').textContent = msg;
+    $('confirmOverlay').classList.add('open');
+  });
+}
+$('confirmYes').addEventListener('click', () => { $('confirmOverlay').classList.remove('open'); if(confirmResolve) confirmResolve(true); });
+$('confirmNo').addEventListener('click', () => { $('confirmOverlay').classList.remove('open'); if(confirmResolve) confirmResolve(false); });
+
+/* Connection indicator */
+function setConnStatus(live) {
+  $('connDot').className = 'conn-dot ' + (live ? 'conn-dot-live' : 'conn-dot-dead');
+  $('connLabel').textContent = live ? 'Canli' : 'Baglanti kesildi';
+}
+
+function badgeHtml(status, paused) {
+  const cls = 'badge badge-' + (status||'queued');
+  const pauseTag = paused ? ' <span class="badge badge-paused">duraklatildi</span>' : '';
+  return '<span class="'+cls+'">' + esc(status||'queued') + '</span>' + pauseTag;
+}
+
+function statusColor(s) {
+  if(s==='completed') return 'var(--color-completed)';
+  if(s==='failed') return 'var(--color-failed)';
+  if(s==='running'||s==='preparing'||s==='queued') return 'var(--color-running)';
+  if(s==='planning') return 'var(--color-planning)';
+  if(s==='evaluating') return 'var(--color-evaluating)';
+  return 'var(--color-queued)';
+}
+
+/* ============================================================
+   Tooltip System
+   ============================================================ */
+const tipEl = $('tooltip');
+let tipTimer = null;
+
+function showTip(target) {
+  const text = target.getAttribute('data-tip');
+  if(!text) return;
+  tipEl.innerHTML = '<span class="tooltip-icon">&#128161;</span> ' + esc(text);
+  const r = target.getBoundingClientRect();
+  let top = r.bottom + 8;
+  let left = r.left;
+  if(top + 120 > window.innerHeight) top = r.top - 80;
+  if(left + 340 > window.innerWidth) left = window.innerWidth - 350;
+  if(left < 10) left = 10;
+  tipEl.style.top = top + 'px';
+  tipEl.style.left = left + 'px';
+  tipEl.classList.add('visible');
+}
+
+function hideTip() { tipEl.classList.remove('visible'); }
+
+document.addEventListener('mouseenter', function(e) {
+  if(!e.target || !e.target.closest) return;
+  const t = e.target.closest('[data-tip]');
+  if(!t) return;
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(() => showTip(t), 800);
+}, true);
+document.addEventListener('mouseleave', function(e) {
+  if(!e.target || !e.target.closest) return;
+  if(e.target.closest('[data-tip]')) { clearTimeout(tipTimer); hideTip(); }
+}, true);
+
+/* ============================================================
+   Routing
+   ============================================================ */
+function navigate(screen) {
+  state.currentScreen = screen;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.screen === screen));
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-'+screen));
+  window.location.hash = screen;
+
+  if(screen === 'overview') refreshDashboard();
+  if(screen === 'tasks') { refreshDashboard(); renderTaskList(); }
+  if(screen === 'leads') refreshLeadRuns();
+  if(screen === 'orchestration') refreshOrchestrationSelect();
+  if(screen === 'plugins') renderPluginsScreen();
+  if(screen === 'settings') loadSettings();
+}
+
+document.querySelectorAll('.nav-item').forEach(n => {
+  n.addEventListener('click', () => navigate(n.dataset.screen));
+});
+
+/* ============================================================
+   SSE Streams
+   ============================================================ */
+let dashReconnectDelay = 1000;
+function connectDashboardStream() {
+  state.streams.dashboard?.close();
+  const src = new EventSource('/api/stream');
+  src.addEventListener('dashboard', e => { const d = safeParse(e.data); if(d) applyDashboard(d); });
+  src.addEventListener('lead_runs', e => {
+    const d = safeParse(e.data);
+    if(!d) return;
+    state.leads.runs = d.runs || [];
+    if(state.currentScreen === 'leads') renderLeadRunList();
+    if(state.currentScreen === 'orchestration') refreshOrchestrationSelect();
+    if(state.currentScreen === 'overview') renderOverviewLeadCount();
+  });
+  src.addEventListener('stream_error', e => console.error('SSE error', safeParse(e.data)));
+  src.onopen = () => { setConnStatus(true); dashReconnectDelay = 1000; };
+  src.onerror = () => {
+    setConnStatus(false);
+    src.close();
+    setTimeout(() => connectDashboardStream(), dashReconnectDelay);
+    dashReconnectDelay = Math.min(dashReconnectDelay * 2, 30000);
+  };
+  state.streams.dashboard = src;
+}
+
+function connectTaskStream(taskId) {
+  state.streams.task?.close();
+  if(!taskId) return;
+  const src = new EventSource('/api/stream?taskId='+encodeURIComponent(taskId));
+  const refresh = debounce(() => refreshSelectedTask(), 150);
+  src.addEventListener('task_event', refresh);
+  src.addEventListener('task_state', refresh);
+  src.addEventListener('stream_error', e => console.error('task SSE', safeParse(e.data)));
+  src.onerror = () => { src.close(); setTimeout(() => connectTaskStream(taskId), 3000); };
+  state.streams.task = src;
+}
+
+function connectLeadStream(runId) {
+  state.streams.lead?.close();
+  if(!runId) return;
+  const src = new EventSource('/api/stream?leadRunId='+encodeURIComponent(runId));
+  const refresh = debounce(() => refreshSelectedLeadRun(), 150);
+  src.addEventListener('lead_event', refresh);
+  src.addEventListener('lead_state', refresh);
+  src.addEventListener('stream_error', e => console.error('lead SSE', JSON.parse(e.data)));
+  state.streams.lead = src;
+}
+
+/* ============================================================
+   OVERVIEW SCREEN
+   ============================================================ */
+function applyDashboard(d) {
+  state.dashboard = d;
+  $('sidebarFooter').textContent = d.repoRoot || 'Agent Orchestrator';
+
+  // Stats
+  const tasks = d.tasks || [];
+  const counts = d.counts || {};
+  const activeCount = d.activeWorkersCount || 0;
+  $('statTotalTasks').textContent = tasks.length;
+  $('statActiveWorkers').textContent = activeCount;
+
+  /* Last updated indicator */
+  const updatedEl = document.querySelector('.last-updated');
+  if(updatedEl) updatedEl.textContent = 'Son guncelleme: ' + fmtTime(d.generatedAt);
+  else {
+    const lu = document.createElement('div');
+    lu.className = 'last-updated';
+    lu.textContent = 'Son guncelleme: ' + fmtTime(d.generatedAt);
+    $('overviewStats')?.after(lu);
+  }
+
+  // Overview
+  if(state.currentScreen === 'overview') {
+    renderOverviewFeed(tasks);
+    renderOverviewWorkers(tasks.filter(t => RUNNING_SET.has(t.status)));
+  }
+
+  // Tasks screen list
+  if(state.currentScreen === 'tasks') renderTaskList();
+}
+
+function renderOverviewLeadCount() {
+  $('statLeadRuns').textContent = state.leads.runs.length;
+}
+
+function renderOverviewFeed(tasks) {
+  const feed = $('overviewFeed');
+  const recent = (tasks||[]).slice(0, 20);
+  if(!recent.length) { feed.innerHTML = '<div class="hint">Henuz olay yok.</div>'; return; }
+  feed.innerHTML = recent.map(t => {
+    const dotClass = t.status==='completed'?'feed-dot-green':t.status==='failed'?'feed-dot-red':RUNNING_SET.has(t.status)?'feed-dot-blue':'feed-dot-gray';
+    return '<div class="feed-item"><div class="feed-dot '+dotClass+'"></div><div class="feed-content"><div class="feed-text">'+esc(t.label)+' <span style="color:'+statusColor(t.status)+'">'+esc(t.status)+'</span></div><div class="feed-time">'+esc(t.requestedBackend)+' &rarr; '+esc(t.backend)+' &middot; '+fmtDate(t.updatedAt)+'</div></div></div>';
+  }).join('');
+}
+
+function renderOverviewWorkers(workers) {
+  const grid = $('overviewWorkers');
+  if(!workers.length) { grid.innerHTML = '<div class="hint">Aktif isci yok.</div>'; return; }
+  grid.innerHTML = workers.map(w =>
+    '<div class="worker-card" data-goto-task="'+esc(w.id)+'"><div class="worker-card-label">'+esc(w.label)+'</div><div class="worker-card-meta">'+esc(w.backend)+' &middot; '+esc(w.status)+'</div></div>'
+  ).join('');
+  grid.querySelectorAll('[data-goto-task]').forEach(n => {
+    n.addEventListener('click', () => { navigate('tasks'); selectTask(n.dataset.gotoTask); });
+  });
+}
+
+async function refreshDashboard() {
+  try {
+    const d = await request('/api/dashboard');
+    applyDashboard(d);
+  } catch(e) { console.error(e); }
+}
+
+/* ============================================================
+   TASKS SCREEN
+   ============================================================ */
+function getFilteredTasks() {
+  let tasks = state.dashboard?.tasks || [];
+  const f = state.tasks.filter;
+  if(f.status) {
+    if(f.status === 'running') tasks = tasks.filter(t => RUNNING_SET.has(t.status));
+    else tasks = tasks.filter(t => t.status === f.status);
+  }
+  if(f.backend) tasks = tasks.filter(t => t.backend === f.backend);
+  if(f.search) {
+    const q = f.search.toLowerCase();
+    tasks = tasks.filter(t => (t.label||'').toLowerCase().includes(q) || (t.promptSummary||'').toLowerCase().includes(q));
+  }
+  return tasks;
+}
+
+function renderTaskList() {
+  const panel = $('taskListPanel');
+  const tasks = getFilteredTasks();
+  if(!tasks.length) { panel.innerHTML = '<div class="card"><div class="hint">Gorev bulunamadi.</div></div>'; return; }
+  panel.innerHTML = tasks.map(t => {
+    const sel = state.tasks.selectedId === t.id ? 'selected' : '';
+    return '<div class="list-item '+sel+'" data-task-id="'+esc(t.id)+'"><div class="list-item-head"><div class="list-item-title">'+esc(t.label)+'</div>'+badgeHtml(t.status)+'</div><div class="list-item-summary">'+esc(t.promptSummary||'')+'</div><div class="list-item-meta">'+esc(t.requestedBackend)+' &rarr; '+esc(t.backend)+(t.fallbackUsed?' (fallback)':'')+' &middot; '+fmtDate(t.updatedAt)+'</div></div>';
+  }).join('');
+  panel.querySelectorAll('[data-task-id]').forEach(n => {
+    n.addEventListener('click', () => selectTask(n.dataset.taskId));
+  });
+}
+
+async function selectTask(taskId) {
+  state.tasks.selectedId = taskId;
+  renderTaskList();
+  connectTaskStream(taskId);
+  await refreshSelectedTask();
+}
+
+async function refreshSelectedTask() {
+  const id = state.tasks.selectedId;
+  if(!id) return;
+  try {
+    const p = await request('/api/tasks/'+encodeURIComponent(id));
+    state.tasks.detail = p.task;
+    state.tasks.events = p.events || [];
+    renderTaskDetail(p.task, p.events||[], p);
+  } catch(e) { console.error(e); }
+}
+
+function renderTaskDetail(task, events, payload) {
+  const panel = $('taskDetailPanel');
+  const canCancel = !TERMINAL.has(task.status);
+  const canCleanup = TERMINAL.has(task.status) && task.worktree?.mode === 'git_worktree';
+  const prompt = (typeof task.prompt === 'string' && task.prompt.trim()) ? task.prompt : 'Prompt kaydedilmedi.';
+  const exec = task.execution || null;
+
+  panel.innerHTML = `
+    <div class="detail-section">
+      <div class="card">
+        <div class="detail-header">
+          <div>
+            <div class="detail-title">${esc(task.label)}</div>
+            <div class="hint">${esc(task.requestedBackend)} &rarr; ${esc(task.backend)}${task.fallbackUsed?' (fallback)':''}</div>
+          </div>
+          ${badgeHtml(task.status)}
+        </div>
+        <div class="action-bar">
+          <button class="btn btn-sm" id="tdRefresh">Yenile</button>
+          <button class="btn btn-sm" id="tdEscalate" data-tip="Gorevi daha guclu bir backend'e yukseltir. Orijinal prompt + transcript korunur. Ornek: Claude takildiysa Codex'e gonderin.">Y&#252;kselt</button>
+          <button class="btn btn-sm btn-danger" id="tdCancel" ${canCancel?'':'disabled'} data-tip="Calisan gorevi iptal eder. Runner sureci sonlandirilir. Sadece terminal olmayan gorevlerde calisir.">&#304;ptal</button>
+          <button class="btn btn-sm" id="tdCleanup" ${canCleanup?'':'disabled'} data-tip="Git worktree kalintisini temizler. Sadece tamamlanan git_worktree gorevlerinde aktif. Branch silinmez.">Temizle</button>
+        </div>
+        <pre class="pre">${esc(JSON.stringify({id:task.id,parentTaskId:task.parentTaskId,worktree:task.worktree,error:task.error,updatedAt:task.updatedAt,completedAt:task.completedAt},null,2))}</pre>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:8px;">Prompt</div>
+        <pre class="pre">${esc(prompt)}</pre>
+      </div>
+    </div>
+    ${exec ? '<div class="detail-section"><div class="card"><div class="card-title" style="margin-bottom:8px;">Execution</div><pre class="pre">'+esc(JSON.stringify(exec,null,2))+'</pre></div></div>' : ''}
+    <div class="detail-section">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
+        <div class="event-list">
+          ${events.map(ev => '<div class="event-item '+esc(ev.stream)+'"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.stream)+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+esc(ev.content||'')+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
+        </div>
+      </div>
+    </div>`;
+
+  $('tdRefresh')?.addEventListener('click', refreshSelectedTask);
+  $('tdEscalate')?.addEventListener('click', () => openEscalationModal(task));
+  $('tdCancel')?.addEventListener('click', () => cancelTask(task));
+  $('tdCleanup')?.addEventListener('click', () => cleanupTask(task));
+}
+
+async function cancelTask(task) {
+  if(!task || TERMINAL.has(task.status)) return;
+  const ok = await confirm('Bu gorevi iptal etmek istediginize emin misiniz? Bu islem geri alinamaz.');
+  if(!ok) return;
+  try {
+    await request('/api/tasks/'+encodeURIComponent(task.id)+'/cancel',{method:'POST',body:'{}'});
+    showSuccess('Gorev iptal edildi.');
+    await refreshDashboard();
+    await refreshSelectedTask();
+  } catch(e) { showError(e); }
+}
+
+async function cleanupTask(task) {
+  if(!task || task.worktree?.mode!=='git_worktree' || !TERMINAL.has(task.status)) return;
+  try {
+    await request('/api/tasks/'+encodeURIComponent(task.id)+'/cleanup',{method:'POST',body:JSON.stringify({deleteBranch:false})});
+    await refreshDashboard();
+    await refreshSelectedTask();
+  } catch(e) { showError(e); }
+}
+
+/* Task filters */
+$('taskStatusFilter').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if(!btn) return;
+  $('taskStatusFilter').querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.tasks.filter.status = btn.dataset.status;
+  renderTaskList();
+});
+$('taskBackendFilter').addEventListener('change', e => { state.tasks.filter.backend = e.target.value; renderTaskList(); });
+$('taskSearch').addEventListener('input', debounce(e => { state.tasks.filter.search = e.target.value; renderTaskList(); }, 250));
+
+/* ============================================================
+   LEADS SCREEN
+   ============================================================ */
+async function refreshLeadRuns() {
+  try {
+    const p = await request('/api/leads');
+    state.leads.runs = p.runs || [];
+    renderLeadRunList();
+    renderOverviewLeadCount();
+    if(state.currentScreen === 'orchestration') refreshOrchestrationSelect();
+  } catch(e) { console.error(e); }
+}
+
+function renderLeadRunList() {
+  const panel = $('leadListPanel');
+  const runs = state.leads.runs;
+  if(!runs.length) { panel.innerHTML = '<div class="card"><div class="hint">Henuz lead run yok.</div></div>'; return; }
+  panel.innerHTML = runs.map(run => {
+    const sel = state.leads.selectedId === run.id ? 'selected' : '';
+    const pct = run.totalItems > 0 ? Math.round((run.completedItems/run.totalItems)*100) : 0;
+    return '<div class="list-item '+sel+'" data-lead-id="'+esc(run.id)+'"><div class="list-item-head"><div class="list-item-title">'+esc(run.label)+'</div>'+badgeHtml(run.phase||run.status, run.paused)+'</div><div class="progress"><div class="progress-fill progress-fill-green" style="width:'+pct+'%"></div></div><div class="list-item-meta">'+run.completedItems+'/'+run.totalItems+' &middot; eval '+((run.evaluationRound||0)+'/'+(run.maxEvalRounds||0))+' &middot; '+esc(run.workerBackend)+'</div><div class="list-item-meta">'+fmtDate(run.updatedAt)+'</div>'+(run.error?'<div class="list-item-meta" style="color:var(--color-failed)">'+esc(run.error)+'</div>':'')+'</div>';
+  }).join('');
+  panel.querySelectorAll('[data-lead-id]').forEach(n => {
+    n.addEventListener('click', () => selectLeadRun(n.dataset.leadId));
+  });
+}
+
+async function selectLeadRun(runId) {
+  state.leads.selectedId = runId;
+  renderLeadRunList();
+  connectLeadStream(runId);
+  await refreshSelectedLeadRun();
+}
+
+async function refreshSelectedLeadRun() {
+  const id = state.leads.selectedId;
+  if(!id) return;
+  try {
+    const p = await request('/api/leads/'+encodeURIComponent(id));
+    state.leads.detail = p.run;
+    state.leads.items = p.items || [];
+    state.leads.events = p.events || [];
+    renderLeadRunDetail(p.run, p.items||[], p.events||[]);
+  } catch(e) { console.error(e); }
+}
+
+function renderLeadRunDetail(run, items, events) {
+  const panel = $('leadDetailPanel');
+  const isTerminal = TERMINAL.has(run.status);
+  const canPause = !isTerminal && !run.paused;
+  const canResume = !isTerminal && run.paused;
+  const canCancel = !isTerminal;
+  const pct = items.length > 0 ? Math.round((items.filter(i=>i.status==='completed').length/items.length)*100) : 0;
+
+  panel.innerHTML = `
+    <div class="detail-section"><div class="card">
+      <div class="detail-header">
+        <div>
+          <div class="detail-title">${esc(run.label)}</div>
+          <div class="hint">${esc(run.leadBackend)} lead / ${esc(run.workerBackend)} workers / max ${run.maxParallel} parallel</div>
+        </div>
+        ${badgeHtml(run.phase||run.status, run.paused)}
+      </div>
+      <div class="action-bar">
+        <button class="btn btn-sm" id="ldRefresh">Yenile</button>
+        <button class="btn btn-sm" id="ldPause" ${canPause?'':'disabled'} data-tip="Oturumu duraklatir. Mevcut isciler devam eder ama yeni is baslatilmaz. Inceleme yapmak icin kullanin.">Duraklat</button>
+        <button class="btn btn-sm btn-success" id="ldResume" ${canResume?'':'disabled'} data-tip="Duraklatilmis oturumu devam ettirir. Bekleyen alt gorevler tekrar baslatilir.">Devam Et</button>
+        <button class="btn btn-sm btn-danger" id="ldCancel" ${canCancel?'':'disabled'} data-tip="Oturumu iptal eder. Tum bekleyen isler durdurulur. Geri alinamaz.">&#304;ptal</button>
+        <button class="btn btn-sm" id="ldAddItem" ${canCancel?'':'disabled'} data-tip="Oturuma yeni alt gorev ekler. Sonraki calistirma dongusunde ise alinir.">G&#246;rev Ekle</button>
+      </div>
+    </div></div>
+    <div class="detail-section"><div class="card">
+      <div class="card-title" style="margin-bottom:8px;">Hedef</div>
+      <pre class="pre">${esc(run.objective)}</pre>
+    </div></div>
+    <div class="detail-section"><div class="card">
+      <div class="card-title" style="margin-bottom:8px;">&#304;lerleme (${pct}%)</div>
+      <div class="progress" style="height:8px;"><div class="progress-fill progress-fill-green" style="width:${pct}%"></div></div>
+      <pre class="pre" style="margin-top:8px;">${esc(JSON.stringify({id:run.id,status:run.status,phase:run.phase,evaluationRound:run.evaluationRound,maxEvalRounds:run.maxEvalRounds,maxRounds:run.maxRounds,error:run.error},null,2))}</pre>
+    </div></div>
+    <div class="detail-section"><div class="card">
+      <div class="card-title" style="margin-bottom:8px;">Alt G&#246;revler (${items.length})</div>
+      ${items.map(item => {
+        const wLink = item.workerTaskId
+          ? '<a href="#" class="worker-link" data-worker-id="'+esc(item.workerTaskId)+'" data-tip="Isci gorevi baglantisi. Tiklayin Gorevler ekraninda detayini gorun.">'+esc(item.workerTaskId)+'</a>'
+          : '<span class="hint">henuz isci yok</span>';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><div><div style="font-weight:600;font-size:13px;">#'+(item.taskIndex+1)+' '+esc(item.label||'')+'</div><div class="hint">round '+item.round+' &middot; '+wLink+'</div>'+(item.error?'<div style="color:var(--color-failed);font-size:11px;">'+esc(item.error)+'</div>':'')+'</div><div>'+badgeHtml(item.status)+'</div></div>';
+      }).join('') || '<div class="hint">Henuz alt gorev yok.</div>'}
+    </div></div>
+    <div class="detail-section"><div class="card">
+      <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
+      <div class="event-list">
+        ${events.map(ev => '<div class="event-item system"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+esc(ev.content||'')+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
+      </div>
+    </div></div>`;
+
+  $('ldRefresh')?.addEventListener('click', refreshSelectedLeadRun);
+  $('ldPause')?.addEventListener('click', () => leadAction(run.id, 'pause'));
+  $('ldResume')?.addEventListener('click', () => leadAction(run.id, 'resume'));
+  $('ldCancel')?.addEventListener('click', () => leadAction(run.id, 'cancel'));
+  $('ldAddItem')?.addEventListener('click', () => openAddItemModal(run.id));
+
+  panel.querySelectorAll('.worker-link').forEach(n => {
+    n.addEventListener('click', e => { e.preventDefault(); navigate('tasks'); selectTask(n.dataset.workerId); });
+  });
+}
+
+async function leadAction(runId, action) {
+  if(action === 'cancel') {
+    const ok = await confirm('Bu oturumu iptal etmek istediginize emin misiniz? Tum bekleyen isler durdurulur.');
+    if(!ok) return;
+  }
+  try {
+    await request('/api/leads/'+encodeURIComponent(runId)+'/'+action,{method:'POST',body:'{}'});
+    const labels = {pause:'Duraklatildi',resume:'Devam ettiriliyor',cancel:'Iptal edildi'};
+    showSuccess(labels[action] || 'Islem tamamlandi.');
+    await refreshSelectedLeadRun();
+    await refreshLeadRuns();
+  } catch(e) { showError(e); }
+}
+
+/* ============================================================
+   ORCHESTRATION SCREEN
+   ============================================================ */
+function refreshOrchestrationSelect() {
+  const sel = $('orchRunSelect');
+  const current = sel.value;
+  const runs = state.leads.runs;
+  sel.innerHTML = '<option value="">Lead Run secin...</option>' +
+    runs.map(r => '<option value="'+esc(r.id)+'" '+(r.id===current?'selected':'')+'>'+esc(r.label)+' ('+esc(r.phase||r.status)+')</option>').join('');
+}
+
+$('orchRunSelect').addEventListener('change', async e => {
+  const id = e.target.value;
+  state.orchestration.selectedRunId = id;
+  if(!id) { $('orchContent').innerHTML = '<div class="card"><div class="hint">Gorsellestirmek icin bir Lead Run secin.</div></div>'; return; }
+  await loadOrchestration(id);
+});
+
+async function loadOrchestration(runId) {
+  try {
+    const p = await request('/api/leads/'+encodeURIComponent(runId));
+    state.orchestration.run = p.run;
+    state.orchestration.items = p.items || [];
+    state.orchestration.events = p.events || [];
+    renderOrchestration(p.run, p.items||[], p.events||[]);
+    /* Also connect SSE for live updates */
+    connectLeadStream(runId);
+  } catch(e) { showError(e); }
+}
+
+function renderOrchestration(run, items, events) {
+  const phase = run.phase || run.status;
+  const content = $('orchContent');
+
+  /* Derive phase timing from events */
+  const timing = derivePhaseTiming(events, run);
+
+  /* Pipeline flow */
+  const pipelineHtml = renderPipelineFlow(phase, timing, run);
+
+  /* Phase timeline bar */
+  const timelineHtml = renderPhaseTimeline(timing, phase);
+
+  /* Agent grid */
+  const agentHtml = renderAgentGrid(run, items);
+
+  /* Swimlanes */
+  const swimHtml = renderSubtaskSwimlanes(items);
+
+  /* Evaluation */
+  const evalHtml = renderEvaluationResult(events, run);
+
+  content.innerHTML = `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:12px;" data-tip="Planlama->Calistirma->Degerlendirme akisini gorsel olarak takip edin.">Pipeline Akisi</div>
+      ${pipelineHtml}
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:8px;" data-tip="Her fazin ne kadar surdugunu renkli cubukla gosterir. Mor=planlama, mavi=calistirma, turuncu=degerlendirme.">Faz Zaman Cizelgesi</div>
+      ${timelineHtml}
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:12px;">Agent Gridi</div>
+      ${agentHtml}
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:8px;">Alt Gorev Seritleri</div>
+      ${swimHtml}
+    </div>
+    ${evalHtml}`;
+
+  /* Bind worker card clicks */
+  content.querySelectorAll('[data-orch-task]').forEach(n => {
+    n.addEventListener('click', () => { navigate('tasks'); selectTask(n.dataset.orchTask); });
+  });
+}
+
+function derivePhaseTiming(events, run) {
+  const t = { planning: {start:null,end:null}, executing: {start:null,end:null}, evaluating: {start:null,end:null} };
+  for(const ev of events) {
+    const c = (ev.content||'').toLowerCase();
+    const ts = ev.createdAt;
+    if(c.includes('planning') && c.includes('start') && !t.planning.start) t.planning.start = ts;
+    if(c.includes('planning') && (c.includes('complete')||c.includes('done')||c.includes('end'))) t.planning.end = ts;
+    if((c.includes('executing')||c.includes('execution')) && (c.includes('start')||c.includes('begin')) && !t.executing.start) t.executing.start = ts;
+    if((c.includes('executing')||c.includes('execution')) && (c.includes('complete')||c.includes('done')||c.includes('end'))) t.executing.end = ts;
+    if(c.includes('evaluat') && (c.includes('start')||c.includes('begin')) && !t.evaluating.start) t.evaluating.start = ts;
+    if(c.includes('evaluat') && (c.includes('complete')||c.includes('done')||c.includes('end'))) t.evaluating.end = ts;
+  }
+  /* Fallback: use phase transitions */
+  if(run.phase === 'planning' && !t.planning.start && run.createdAt) t.planning.start = run.createdAt;
+  return t;
+}
+
+function renderPipelineFlow(phase, timing, run) {
+  const phases = ['planning','executing','evaluating'];
+  const labels = {planning:'PLANLAMA', executing:'CALISTIRMA', evaluating:'DEGERLENDIRME'};
+  const colors = {planning:'planning-color', executing:'executing-color', evaluating:'evaluating-color'};
+  const phaseOrder = {planning:0, executing:1, evaluating:2, completed:3, failed:3, cancelled:3};
+  const currentIdx = phaseOrder[phase] ?? -1;
+
+  let html = '<div class="pipeline">';
+  phases.forEach((p, i) => {
+    if(i > 0) html += '<div class="pipeline-arrow"></div>';
+    let cls = 'pipeline-node ' + colors[p];
+    let statusTxt = '';
+    if(i < currentIdx || phase === 'completed') {
+      cls += ' done';
+      const dur = timing[p].start && timing[p].end ? Math.round((new Date(timing[p].end)-new Date(timing[p].start))/1000) : null;
+      statusTxt = '&#10003;' + (dur !== null ? ' '+dur+'s' : '');
+    } else if(i === currentIdx && phase !== 'completed' && phase !== 'failed') {
+      cls += ' active';
+      statusTxt = 'Aktif';
+    } else {
+      statusTxt = 'Bekliyor';
+    }
+    const tip = p==='planning' ? 'Planlama asamasi. Lead agent hedefi alt gorevlere ayirir.'
+      : p==='executing' ? 'Calistirma asamasi. Worker agentlar alt gorevleri paralel calistirir.'
+      : 'Degerlendirme asamasi. Lead agent sonuclari inceler ve PASS/RETRY/FAIL verir.';
+    html += '<div class="'+cls+'" data-tip="'+esc(tip)+'"><div class="pipeline-node-label">'+labels[p]+'</div><div class="pipeline-node-status">'+statusTxt+'</div></div>';
+  });
+
+  /* Retry arrow */
+  const evalRound = run.evaluationRound || 0;
+  if(evalRound > 0) {
+    html += '<div class="retry-arrow" data-tip="Yeniden deneme oku. Degerlendirme RETRY verdiyse CALISTIRMA\'ya geri donusu gosterir."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg> RETRY (Round '+evalRound+')</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderPhaseTimeline(timing, currentPhase) {
+  const total = [];
+  const phases = ['planning','executing','evaluating'];
+  const colors = {planning:'phase-segment-planning', executing:'phase-segment-executing', evaluating:'phase-segment-evaluating'};
+  const now = Date.now();
+
+  let totalMs = 0;
+  for(const p of phases) {
+    const s = timing[p].start ? new Date(timing[p].start).getTime() : 0;
+    const e = timing[p].end ? new Date(timing[p].end).getTime() : (currentPhase === p && s ? now : 0);
+    const dur = s && e ? e - s : 0;
+    total.push({phase: p, duration: dur, active: currentPhase === p && !timing[p].end});
+    totalMs += dur;
+  }
+
+  if(totalMs === 0) return '<div class="phase-timeline"><div style="width:100%;text-align:center;line-height:28px;" class="hint">Henuz faz zamanlama verisi yok</div></div>';
+
+  let html = '<div class="phase-timeline">';
+  for(const t of total) {
+    if(t.duration === 0) continue;
+    const pct = Math.max(5, Math.round((t.duration/totalMs)*100));
+    const secs = Math.round(t.duration/1000);
+    const animated = t.active ? ' animated' : '';
+    html += '<div class="phase-segment '+colors[t.phase]+animated+'" style="width:'+pct+'%;" data-tip="'+esc(t.phase)+': '+secs+'s">'+secs+'s</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderAgentGrid(run, items) {
+  let html = '<div class="agent-grid">';
+
+  /* Lead agent card */
+  html += '<div class="agent-lead" data-tip="Lider agent karti. Hangi backend\'i kullandigini ve oturum durumunu gosterir."><div class="agent-lead-label">LEAD AGENT</div><div class="agent-lead-meta">'+esc(run.leadBackend)+' &middot; '+esc(run.phase||run.status)+'</div></div>';
+
+  /* Connection lines */
+  const workers = items.filter(i => i.workerTaskId);
+  if(workers.length > 0) {
+    html += '<div class="agent-connections">';
+    for(let i = 0; i < Math.min(workers.length, 8); i++) html += '<div class="agent-line"></div>';
+    html += '</div>';
+  }
+
+  /* Worker cards */
+  html += '<div class="agent-workers">';
+  if(items.length === 0) {
+    html += '<div class="hint">Henuz alt gorev yok</div>';
+  } else {
+    for(const item of items) {
+      let cls = 'agent-worker';
+      if(item.status === 'running' || item.status === 'preparing') cls += ' running';
+      else if(item.status === 'completed') cls += ' completed';
+      else if(item.status === 'failed') cls += ' failed';
+      else cls += ' pending';
+      const taskAttr = item.workerTaskId ? ' data-orch-task="'+esc(item.workerTaskId)+'"' : '';
+      const tip = 'Isci agent karti. Alt gorevi, backendini ve ilerlemesini gosterir.';
+      html += '<div class="'+cls+'"'+taskAttr+' data-tip="'+esc(tip)+'"><div class="agent-worker-label">#'+(item.taskIndex+1)+' '+esc(item.label||'')+'</div><div class="agent-worker-meta">'+esc(item.status)+' &middot; r'+item.round+'</div></div>';
+    }
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderSubtaskSwimlanes(items) {
+  if(!items.length) return '<div class="hint">Henuz alt gorev yok.</div>';
+  let html = '<div class="swimlanes">';
+  for(const item of items) {
+    let fillCls = 'swimlane-fill-pending';
+    let width = '0%';
+    if(item.status === 'completed') { fillCls = 'swimlane-fill-completed'; width = '100%'; }
+    else if(item.status === 'failed') { fillCls = 'swimlane-fill-failed'; width = '100%'; }
+    else if(item.status === 'running' || item.status === 'preparing') { fillCls = 'swimlane-fill-running'; width = '50%'; }
+    html += '<div class="swimlane" data-tip="Alt gorev seridi. Yatay ilerleme cubugu."><div class="swimlane-label">#'+(item.taskIndex+1)+' '+esc(item.label||'')+'</div><div class="swimlane-bar"><div class="swimlane-fill '+fillCls+'" style="width:'+width+'"></div></div><div class="swimlane-meta">round '+item.round+' '+esc(item.status)+'</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderEvaluationResult(events, run) {
+  /* Find latest evaluation event */
+  let verdict = null, reason = '', followUps = 0;
+  for(const ev of [...events].reverse()) {
+    const c = (ev.content||'');
+    if(c.includes('PASS') || c.includes('RETRY') || c.includes('FAIL')) {
+      if(c.includes('PASS')) verdict = 'PASS';
+      else if(c.includes('RETRY')) verdict = 'RETRY';
+      else if(c.includes('FAIL')) verdict = 'FAIL';
+      reason = c;
+      break;
+    }
+  }
+  if(run.resultSummary) reason = run.resultSummary;
+  if(!verdict && run.status === 'completed') verdict = 'PASS';
+  if(!verdict && run.status === 'failed') verdict = 'FAIL';
+  if(!verdict) return '';
+
+  const vCls = verdict==='PASS'?'eval-verdict-pass':verdict==='RETRY'?'eval-verdict-retry':'eval-verdict-fail';
+  const vTip = verdict==='PASS' ? 'Basarili. Hedef karsilandi, tum alt gorevler yeterli.' :
+    verdict==='RETRY' ? 'Yeniden deneme. Bazi alt gorevler yetersiz.' :
+    'Basarisiz. Hedef mevcut yaklasimla karsilanamaz.';
+
+  return `<div class="eval-panel">
+    <div class="card-title" style="margin-bottom:8px;">Degerlendirme Sonucu</div>
+    <div class="eval-verdict ${vCls}" data-tip="${esc(vTip)}">${verdict}</div>
+    <div class="hint">Round ${run.evaluationRound||0}/${run.maxEvalRounds||0}</div>
+    ${reason ? '<div class="eval-reason"><pre class="pre">'+esc(reason)+'</pre></div>' : ''}
+  </div>`;
+}
+
+/* Auto-update orchestration when lead stream fires */
+const origConnectLead = connectLeadStream;
+/* Override lead stream to also update orchestration screen */
+function connectLeadStreamForOrch(runId) {
+  state.streams.lead?.close();
+  if(!runId) return;
+  const src = new EventSource('/api/stream?leadRunId='+encodeURIComponent(runId));
+  const refresh = debounce(() => {
+    if(state.currentScreen === 'leads') refreshSelectedLeadRun();
+    if(state.currentScreen === 'orchestration' && state.orchestration.selectedRunId === runId) loadOrchestration(runId);
+  }, 200);
+  src.addEventListener('lead_event', refresh);
+  src.addEventListener('lead_state', refresh);
+  src.addEventListener('stream_error', e => console.error('lead SSE', JSON.parse(e.data)));
+  state.streams.lead = src;
+}
+/* Replace */
+connectLeadStream = connectLeadStreamForOrch;
+
+/* ============================================================
+   SETTINGS SCREEN
+   ============================================================ */
+async function loadSettings() {
+  try {
+    const s = await request('/api/settings');
+    state.settings = s;
+    $('settLeadBackend').value = s.leadBackend || 'codex';
+    $('settWorkerBackend').value = s.defaultWorkerBackend || 'claude';
+    $('settCodexFallback').value = s.codexFallbackBackend || 'claude';
+    if(state.dashboard) {
+      $('settRepoRoot').textContent = state.dashboard.repoRoot || '-';
+    }
+  } catch(e) { console.error(e); }
+}
+
+$('settSaveBtn').addEventListener('click', async () => {
+  try {
+    await request('/api/settings',{method:'POST',body:JSON.stringify({
+      leadBackend: $('settLeadBackend').value,
+      defaultWorkerBackend: $('settWorkerBackend').value,
+      codexFallbackBackend: $('settCodexFallback').value,
+    })});
+    $('settSaveBtn').textContent = 'Kaydedildi!';
+    setTimeout(() => $('settSaveBtn').textContent = 'Kaydet', 2000);
+  } catch(e) { showError(e); }
+});
+
+$('settDoctorBtn').addEventListener('click', async () => {
+  $('settDoctorBtn').disabled = true;
+  $('settDoctorResults').innerHTML = '<div class="hint">Kontrol ediliyor...</div>';
+  try {
+    const d = await request('/api/doctor');
+    const results = [];
+    /* Backend availability */
+    const b = d.backends || {};
+    if(b.claude) results.push({ok:b.claude.available, text:'Claude CLI: '+(b.claude.available ? b.claude.version : 'Bulunamadi')});
+    if(b.codex) results.push({ok:b.codex.available, text:'Codex CLI: '+(b.codex.available ? b.codex.version : 'Bulunamadi')});
+    /* Git info */
+    const g = d.git || {};
+    results.push({ok:!!g.branch, text:'Git Branch: '+(g.branch||'Bilinmiyor')});
+    results.push({ok:!g.dirty, text:'Git Durumu: '+(g.dirty?'Kirli (degisiklik var)':'Temiz')});
+    /* Paths */
+    results.push({ok:!!d.repoRoot, text:'Repo Root: '+(d.repoRoot||'BULUNAMADI')});
+    results.push({ok:!!d.stateRoot, text:'State Root: '+(d.stateRoot||'BULUNAMADI')});
+    /* Dir checks */
+    const dr = d.dirs || {};
+    if(dr.stateRoot) results.push({ok:true, text:'State dizini: OK'});
+    if(dr.tasksDir) results.push({ok:true, text:'Tasks dizini: OK'});
+    $('settDoctorResults').innerHTML = results.map(r =>
+      '<div class="doctor-item"><span class="'+(r.ok?'doctor-ok':'doctor-fail')+'">'+(r.ok?'\u2713':'\u2717')+'</span> '+esc(r.text)+'</div>'
+    ).join('');
+  } catch(e) {
+    $('settDoctorResults').innerHTML = '<div class="doctor-item"><span class="doctor-fail">\u2717</span> '+esc(e.message)+'</div>';
+  } finally {
+    $('settDoctorBtn').disabled = false;
+  }
+});
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+function openModal(id) { $(id).classList.add('open'); }
+function closeModal(id) { $(id).classList.remove('open'); }
+
+/* Task launch */
+function openTaskLaunchModal() {
+  state._launchMode = 'new';
+  state._escalateTaskId = null;
+  $('modalTaskTitle').textContent = 'Yeni Gorev';
+  $('modalTaskSubtitle').textContent = 'Claude veya Codex backend\'inde yeni isci gorevi olusturun.';
+  $('mTaskPromptLabel').textContent = 'Prompt';
+  $('mTaskLabel').value = '';
+  $('mTaskBackend').value = '';
+  $('mTaskFallback').value = '';
+  $('mTaskWorktree').value = 'reuse_repo';
+  $('mTaskEffort').value = '';
+  $('mTaskBody').value = '';
+  openModal('modalTaskLaunch');
+}
+
+function openEscalationModal(task) {
+  state._launchMode = 'escalate';
+  state._escalateTaskId = task.id;
+  $('modalTaskTitle').textContent = 'Gorevi Yukselt';
+  $('modalTaskSubtitle').textContent = 'Daha guclu backend\'e yukseltme. Orijinal prompt korunur.';
+  $('mTaskPromptLabel').textContent = 'Yukseltme Nedeni';
+  $('mTaskLabel').value = task.label + '-escalated';
+  $('mTaskBackend').value = 'codex';
+  $('mTaskFallback').value = '';
+  $('mTaskWorktree').value = task.worktree?.mode || 'reuse_repo';
+  $('mTaskEffort').value = task.effort || '';
+  $('mTaskBody').value = 'Claude worker takıldi. Mevcut contextten devam edip gorevi tamamla.';
+  openModal('modalTaskLaunch');
+}
+
+$('mTaskClose').addEventListener('click', () => closeModal('modalTaskLaunch'));
+$('mTaskSubmit').addEventListener('click', async () => {
+  $('mTaskSubmit').disabled = true;
+  try {
+    if(state._launchMode === 'escalate' && state._escalateTaskId) {
+      await request('/api/tasks/'+encodeURIComponent(state._escalateTaskId)+'/escalate',{method:'POST',body:JSON.stringify({
+        label:$('mTaskLabel').value||undefined, backend:$('mTaskBackend').value||undefined,
+        fallbackBackend:$('mTaskFallback').value||undefined, worktreeMode:$('mTaskWorktree').value||undefined,
+        effort:$('mTaskEffort').value||undefined, reason:$('mTaskBody').value||undefined,
+      })});
+    } else {
+      if(!$('mTaskBody').value.trim()) throw new Error('Prompt gerekli.');
+      await request('/api/tasks/launch',{method:'POST',body:JSON.stringify({tasks:[{
+        label:$('mTaskLabel').value||undefined, backend:$('mTaskBackend').value||undefined,
+        fallbackBackend:$('mTaskFallback').value||undefined, worktreeMode:$('mTaskWorktree').value||undefined,
+        effort:$('mTaskEffort').value||undefined, task:$('mTaskBody').value,
+      }]})});
+    }
+    closeModal('modalTaskLaunch');
+    await refreshDashboard();
+  } catch(e) { showError(e); } finally { $('mTaskSubmit').disabled = false; }
+});
+
+/* Lead launch */
+$('mLeadClose').addEventListener('click', () => closeModal('modalLeadLaunch'));
+$('mLeadSubmit').addEventListener('click', async () => {
+  $('mLeadSubmit').disabled = true;
+  try {
+    if(!$('mLeadObjective').value.trim()) throw new Error('Hedef gerekli.');
+    const result = await request('/api/leads/launch',{method:'POST',body:JSON.stringify({
+      objective:$('mLeadObjective').value,
+      label:$('mLeadLabel').value||undefined,
+      workerBackend:$('mLeadWorkerBackend').value||undefined,
+      maxParallel:Number($('mLeadMaxParallel').value)||undefined,
+      maxRounds:Number($('mLeadMaxRounds').value)||undefined,
+      maxEvalRounds:Number($('mLeadMaxEvalRounds').value)??undefined,
+    })});
+    closeModal('modalLeadLaunch');
+    navigate('leads');
+    await refreshLeadRuns();
+    if(result.id) await selectLeadRun(result.id);
+  } catch(e) { showError(e); } finally { $('mLeadSubmit').disabled = false; }
+});
+
+/* Add item */
+function openAddItemModal(runId) {
+  state._addItemRunId = runId;
+  $('mAddItemLabel').value = '';
+  $('mAddItemInstruction').value = '';
+  openModal('modalAddItem');
+}
+
+$('mAddItemClose').addEventListener('click', () => closeModal('modalAddItem'));
+$('mAddItemSubmit').addEventListener('click', async () => {
+  $('mAddItemSubmit').disabled = true;
+  try {
+    if(!$('mAddItemInstruction').value.trim()) throw new Error('Talimat gerekli.');
+    await request('/api/leads/'+encodeURIComponent(state._addItemRunId)+'/items',{method:'POST',body:JSON.stringify({
+      label:$('mAddItemLabel').value||undefined,
+      instruction:$('mAddItemInstruction').value,
+    })});
+    closeModal('modalAddItem');
+    await refreshSelectedLeadRun();
+  } catch(e) { showError(e); } finally { $('mAddItemSubmit').disabled = false; }
+});
+
+/* Escape key for modals */
+window.addEventListener('keydown', e => {
+  if(e.key === 'Escape') {
+    const open = document.querySelectorAll('.modal-overlay.open, .confirm-overlay.open');
+    if(open.length) open[open.length - 1].classList.remove('open');
+  }
+});
+
+/* Modal backdrop click-to-close */
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.classList.remove('open'); });
+});
+
+/* ============================================================
+   PLUGINS SCREEN
+   ============================================================ */
+const KNOWN_PLUGINS = [
+  {name:'Playwright', pkg:'@playwright/mcp', desc:'Browser otomasyonu ve test. DOM etklesimi, form doldurma, screenshot, navigasyon.', category:'Testing'},
+  {name:'Context7', pkg:'@upstash/context7-mcp', desc:'Guncel library dokumantasyonu. React, Playwright, Clojure vb. icin canli dokuman cekersiniz.', category:'Context'},
+  {name:'Sequential Thinking', pkg:'@modelcontextprotocol/server-sequential-thinking', desc:'Yapilandirilmis dusunme. Karmasik problemleri adim adim cozer, geri donup revize edebilir.', category:'Reasoning'},
+  {name:'CRASH', pkg:'crash-mcp', desc:'Ileri duzey reasoning. Branching, confidence scoring, alternatif cozum yollari kesfetme.', category:'Reasoning'},
+  {name:'GitHub', pkg:'github-mcp-server', desc:'GitHub entegrasyonu. Issue, PR, branch yonetimi, kod analizi.', category:'DevOps'},
+  {name:'Jira', pkg:'@aashari/mcp-server-atlassian-jira', desc:'Jira entegrasyonu. Issue takibi, proje yonetimi, sprint yonetimi.', category:'Business'},
+  {name:'Linear', pkg:'@tacticlaunch/mcp-linear', desc:'Linear entegrasyonu. Issue, proje, takim ve dongu yonetimi.', category:'Business'},
+];
+
+function renderPluginsScreen() {
+  const grid = $('pluginGrid');
+  /* Try to read .mcp.json from server, fallback to known list */
+  request('/api/plugins').then(data => {
+    const active = data.plugins || [];
+    const allPlugins = KNOWN_PLUGINS.map(p => {
+      const isActive = active.some(cfg => {
+        const args = (cfg.args || []).join(' ');
+        return args.includes(p.pkg) || (cfg.command && cfg.command.includes(p.pkg));
+      });
+      return {...p, active: isActive};
+    });
+    grid.innerHTML = allPlugins.map(p =>
+      '<div class="plugin-card"><div class="plugin-card-header"><span class="plugin-name">'+esc(p.name)+'</span><span class="plugin-status '+(p.active?'plugin-status-active':'plugin-status-inactive')+'">'+(p.active?'Aktif':'Pasif')+'</span></div><div class="plugin-desc">'+esc(p.desc)+'</div><div class="plugin-meta">'+esc(p.category)+' &middot; '+esc(p.pkg)+'</div></div>'
+    ).join('');
+  }).catch(() => {
+    /* Fallback: show known plugins as reference */
+    grid.innerHTML = KNOWN_PLUGINS.map(p =>
+      '<div class="plugin-card"><div class="plugin-card-header"><span class="plugin-name">'+esc(p.name)+'</span><span class="plugin-status plugin-status-inactive">Bilinmiyor</span></div><div class="plugin-desc">'+esc(p.desc)+'</div><div class="plugin-meta">'+esc(p.category)+' &middot; '+esc(p.pkg)+'</div></div>'
+    ).join('');
+  });
+}
+
+/* ============================================================
+   Quick Action & Button Bindings
+   ============================================================ */
+$('qaNewTask').addEventListener('click', openTaskLaunchModal);
+$('qaNewLead').addEventListener('click', () => { $('mLeadLabel').value=''; $('mLeadObjective').value=''; openModal('modalLeadLaunch'); });
+$('qaDemo').addEventListener('click', async () => {
+  $('qaDemo').style.opacity = '0.5';
+  try {
+    /* Launch demo batch tasks */
+    await request('/api/demo/claude-batch',{method:'POST',body:'{}'});
+    /* Also launch a demo lead run for orchestration visualization */
+    try {
+      const leadResult = await request('/api/leads/launch',{method:'POST',body:JSON.stringify({
+        objective:'Demo orchestration: Audit the codebase for basic quality checks. Review file structure, naming conventions, and identify potential improvements.',
+        label:'demo-orchestration',
+        maxParallel:2,
+        maxRounds:1,
+        maxEvalRounds:1,
+      })});
+      console.log('Demo lead run launched:', leadResult.id);
+    } catch(leadErr) { console.warn('Demo lead run failed (non-blocking):', leadErr.message); }
+    await refreshDashboard();
+    await refreshLeadRuns();
+  }
+  catch(e) { showError(e); }
+  finally { $('qaDemo').style.opacity = '1'; }
+});
+$('qaDoctor').addEventListener('click', () => { navigate('settings'); $('settDoctorBtn').click(); });
+
+$('taskNewBtn').addEventListener('click', openTaskLaunchModal);
+$('leadNewBtn').addEventListener('click', () => { $('mLeadLabel').value=''; $('mLeadObjective').value=''; openModal('modalLeadLaunch'); });
+$('leadRefreshBtn').addEventListener('click', refreshLeadRuns);
+
+/* ============================================================
+   Init
+   ============================================================ */
+const hash = window.location.hash.replace('#','');
+if(['overview','tasks','leads','orchestration','plugins','settings'].includes(hash)) {
+  navigate(hash);
+} else {
+  navigate('overview');
+}
+
+connectDashboardStream();
+refreshDashboard();
+refreshLeadRuns();
+loadSettings();
+
+/* Periodic refresh */
+setInterval(() => refreshDashboard().catch(console.error), 15000);
+
+})();
+</script>
+</body>
+</html>
