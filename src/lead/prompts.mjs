@@ -1,4 +1,4 @@
-import { shortenText } from '../lib/index.mjs';
+import { getWorkspaceSummary, shortenText } from '../lib/index.mjs';
 
 export function composePlannerPrompt(run, rulesText) {
   const rulesBlock = rulesText
@@ -12,12 +12,19 @@ export function composePlannerPrompt(run, rulesText) {
     '',
     rulesBlock,
     '',
+    'IMPORTANT: Each subtask instruction you write MUST include:',
+    '1. A clear, specific task description',
+    '2. Which files/modules to focus on',
+    '3. Which files/modules NOT to touch',
+    '4. A reminder to read CLAUDE.md before starting',
+    '5. Expected output/verification criteria',
+    '',
     'Return ONLY a JSON array of subtask objects. Each object must have:',
     '- "label": short descriptive name (kebab-case)',
-    '- "instruction": detailed instruction for a worker agent',
+    '- "instruction": detailed instruction for a worker agent (include scope, files, constraints)',
     '',
     'Example:',
-    '[{"label": "fix-auth-bug", "instruction": "Find and fix the authentication timeout in login.mjs..."}]',
+    '[{"label": "fix-auth-bug", "instruction": "Read CLAUDE.md first. Fix the authentication timeout in src/auth/login.mjs. Only modify files in src/auth/. Do NOT touch src/api/ or tests/. Run npm test after fixing. Expected: login timeout set to 30s instead of 5s."}]',
     '',
     'Requirements:',
     '- Keep subtasks independent and parallelizable where possible.',
@@ -27,7 +34,7 @@ export function composePlannerPrompt(run, rulesText) {
   ].join('\n');
 }
 
-export function composeEvaluatorPrompt(run, items, rulesText) {
+export async function composeEvaluatorPrompt(run, items, rulesText, wsPath) {
   const rulesBlock = rulesText ? `Project rules (from CLAUDE.md):\n${rulesText}` : 'No external rules were injected.';
 
   const itemSummaries = items
@@ -44,12 +51,22 @@ export function composeEvaluatorPrompt(run, items, rulesText) {
     })
     .join('\n\n');
 
+  let workspaceBlock = '';
+  if (wsPath) {
+    const wsSummary = await getWorkspaceSummary(wsPath, 3000);
+    if (wsSummary) {
+      workspaceBlock = `Shared workspace summary (inter-agent outputs):\n${wsSummary}`;
+    }
+  }
+
   return [
     'You are an evaluation agent. Assess whether the objective has been achieved.',
     '',
     `Objective: ${run.objective}`,
     '',
     rulesBlock,
+    '',
+    workspaceBlock,
     '',
     'Subtask results:',
     itemSummaries,
@@ -68,7 +85,7 @@ export function composeEvaluatorPrompt(run, items, rulesText) {
   ].join('\n');
 }
 
-export function composeWorkerPrompt({ run, item, rulesText, round, previousOutcome }) {
+export function composeWorkerPrompt({ run, item, rulesText, round, previousOutcome, wsPath }) {
   const retryNote = previousOutcome
     ? [
         'Previous attempt did not pass completion criteria.',
@@ -89,19 +106,44 @@ export function composeWorkerPrompt({ run, item, rulesText, round, previousOutco
       ].join('\n\n')
     : 'No external CLAUDE.md rules were injected for this run.';
 
+  const wsNote = wsPath
+    ? `Shared workspace: ${wsPath}\nYou may read this JSON file to see outputs from other agents in this run.`
+    : '';
+
+  // Mission briefing — always prepended so workers never lose context after compaction
+  const missionBriefing = [
+    '=== ZORUNLU BRIFING (her zaman gecerli, context sıkıştırılsa bile) ===',
+    `Proje: ${run.label}`,
+    `Genel hedef: ${run.objective}`,
+    `Senin gorevin: Subtask #${item.taskIndex + 1} — ${shortenText(item.instruction, 200)}`,
+    `Round: ${round}/${run.maxRounds}`,
+    '',
+    'KRITIK KURALLAR:',
+    '1. CLAUDE.md dosyasini oku ve kurallarina uy. Her round basinda tekrar oku.',
+    '2. Sadece sana verilen subtask kapsaminda calis. Diger dosyalara/modullere dokunma.',
+    '3. Degisiklik yaptiginda test calistir. Test kirilirsa fixle.',
+    '4. Isini bitirdiginde sonuc ozetini yaz: ne yaptin, ne degistirdin, kalan riskler.',
+    '5. Rate limit hatasi alirsan 30 saniye bekleyip tekrar dene, fail olarak bitirme.',
+    '6. Bu bir orkestrasyon sistemi — sen alt iscisin. Kapsamini asma.',
+    '=== BRIFING SONU ===',
+  ].join('\n');
+
   return [
-    `Lead run label: ${run.label}`,
-    `Lead objective: ${run.objective}`,
-    `Subtask ${item.taskIndex + 1}: ${item.instruction}`,
-    `Attempt round: ${round}/${run.maxRounds}`,
+    missionBriefing,
     '',
     rulesBlock,
     '',
+    `Full subtask instruction: ${item.instruction}`,
+    '',
     retryNote,
+    '',
+    wsNote,
     '',
     'Execution requirements:',
     '- Keep scope limited to this subtask.',
+    '- Read CLAUDE.md at the start of your session.',
     '- Run relevant checks/tests when code is changed.',
+    '- If you hit a rate limit, wait 30 seconds and retry. Do NOT give up.',
     '- End with a concise result summary and residual risks.',
   ]
     .filter(Boolean)

@@ -1586,7 +1586,10 @@ function renderLeadRunDetail(run, items, events) {
         <label class="form-label">Ek Alt Gorevler (opsiyonel, satirbasina bir talimat)</label>
         <textarea id="ldContItems" class="form-input" rows="3" placeholder="Her satira bir alt gorev yazin...&#10;Ornek: Login sayfasindaki bug'i fix et&#10;Ornek: Test coverage ekle" data-tip="Her satir ayri bir alt gorev olur. Yeni hedef ile birlikte kullanmak yerine, dogrudan calistirilacak gorevler icin."></textarea>
       </div>
-      <button class="btn btn-accent" id="ldContinue" data-tip="Oturumu yeniden baslatir. Yeni hedef ve/veya ek gorevler ile devam eder.">Oturumu Yeniden Baslat</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-accent" id="ldContinue" data-tip="Oturumu yeniden baslatir. Yeni hedef ve/veya ek gorevler ile devam eder.">Oturumu Yeniden Baslat</button>
+        <button class="btn btn-sm" id="ldRetryFailed" style="background:var(--color-evaluating);color:#000;" data-tip="Basarisiz alt gorevleri tekrar dener. Rate limit veya gecici hatalar icin idealdir. Hic ek hedef/gorev gerekmez, sadece tiklayin.">Basarisizlari Tekrar Dene</button>
+      </div>
     </div></div>` : ''}
     ${run.resultSummary ? `
     <div class="detail-section"><div class="card">
@@ -1658,6 +1661,26 @@ function renderLeadRunDetail(run, items, events) {
       const btn = $('ldContinue');
       if(btn) { btn.disabled = false; btn.textContent = 'Oturumu Yeniden Baslat'; }
     }
+  });
+
+  // Retry failed items — one-click: reopen run with no new objective, just re-queue failed items
+  $('ldRetryFailed')?.addEventListener('click', async () => {
+    const failedItems = items.filter(i => i.status === 'failed' || i.status === 'cancelled');
+    if(failedItems.length === 0) {
+      showError(new Error('Basarisiz alt gorev yok, tekrar denemeye gerek yok.'));
+      return;
+    }
+    const ok = await confirm(failedItems.length + ' basarisiz gorev tekrar denenecek. Devam edilsin mi?');
+    if(!ok) return;
+    $('ldRetryFailed').disabled = true;
+    try {
+      const retryItems = failedItems.map(i => ({ label: i.label+'-retry', instruction: i.instruction || 'Onceki gorevi tekrar dene.' }));
+      await request('/api/leads/'+encodeURIComponent(run.id)+'/continue', { method:'POST', body:JSON.stringify({ items: retryItems }) });
+      showSuccess(failedItems.length + ' gorev tekrar deneniyor!');
+      await refreshSelectedLeadRun();
+      await refreshLeadRuns();
+    } catch(e) { showError(e); }
+    finally { const btn = $('ldRetryFailed'); if(btn) btn.disabled = false; }
   });
 
   panel.querySelectorAll('.worker-link').forEach(n => {
