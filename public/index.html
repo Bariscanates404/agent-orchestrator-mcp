@@ -788,6 +788,10 @@ a:hover{text-decoration:underline;}
         </select>
       </label>
     </div>
+    <label>
+      <div class="form-label" data-tip="Calisma dizini. Bos birakirsaniz varsayilan repo root kullanilir. Farkli bir projede calistirmak icin tam yol girin. Ornek: /Users/bariscanates/scripts">CWD (Opsiyonel)</div>
+      <input class="form-input" id="mTaskCwd" type="text" placeholder="/Users/...  (bos = varsayilan repo)"/>
+    </label>
     <div class="form-row">
       <label>
         <div class="form-label" data-tip="Yedek backend. Se&#231;ilen backend kullan&#305;lamazsa bu devreye girer. &#214;rnek: Codex yoksa Claude'a d&#252;&#351;s&#252;n.">Fallback</div>
@@ -967,6 +971,27 @@ function fmtAgo(ts) {
   if(s < 60) return s+'s once';
   if(s < 3600) return Math.floor(s/60)+'dk once';
   return Math.floor(s/3600)+'sa once';
+}
+function fmtEventContent(content, eventType) {
+  if(!content) return '';
+  /* Try to parse stdout_chunk JSON and extract the readable result */
+  if(eventType === 'stdout_chunk') {
+    try {
+      const obj = JSON.parse(content);
+      if(obj.type === 'result' && obj.result) {
+        const dur = obj.duration_ms ? ' ('+Math.round(obj.duration_ms/1000)+'s)' : '';
+        const cost = obj.total_cost_usd ? ' $'+obj.total_cost_usd.toFixed(2) : '';
+        const turns = obj.num_turns ? ' '+obj.num_turns+' turns' : '';
+        const header = (obj.subtype==='success'?'BASARILI':'BASARISIZ')+dur+cost+turns;
+        return '<div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">'+esc(header)+'</div>'+esc(obj.result);
+      }
+      /* For other JSON objects, show pretty-printed */
+      return esc(JSON.stringify(obj, null, 2));
+    } catch { /* not JSON, show raw */ }
+  }
+  /* Truncate very long raw content */
+  if(content.length > 2000) return esc(content.substring(0,2000)) + '\n... ('+content.length+' karakter)';
+  return esc(content);
 }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 function safeParse(str) { try { return JSON.parse(str); } catch(e) { console.error('JSON parse error:', e); return null; } }
@@ -1277,7 +1302,7 @@ function renderTaskDetail(task, events, payload) {
       <div class="card">
         <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
         <div class="event-list">
-          ${events.map(ev => '<div class="event-item '+esc(ev.stream)+'"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.stream)+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+esc(ev.content||'')+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
+          ${events.map(ev => '<div class="event-item '+esc(ev.stream)+'"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.stream)+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+fmtEventContent(ev.content, ev.eventType)+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
         </div>
       </div>
     </div>`;
@@ -1413,7 +1438,7 @@ function renderLeadRunDetail(run, items, events) {
     <div class="detail-section"><div class="card">
       <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
       <div class="event-list">
-        ${events.map(ev => '<div class="event-item system"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+esc(ev.content||'')+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
+        ${events.map(ev => '<div class="event-item system"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+fmtEventContent(ev.content, ev.eventType)+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
       </div>
     </div></div>`;
 
@@ -1779,6 +1804,7 @@ function openTaskLaunchModal() {
   $('mTaskWorktree').value = 'reuse_repo';
   $('mTaskEffort').value = '';
   $('mTaskBody').value = '';
+  $('mTaskCwd').value = '';
   openModal('modalTaskLaunch');
 }
 
@@ -1813,6 +1839,7 @@ $('mTaskSubmit').addEventListener('click', async () => {
         label:$('mTaskLabel').value||undefined, backend:$('mTaskBackend').value||undefined,
         fallbackBackend:$('mTaskFallback').value||undefined, worktreeMode:$('mTaskWorktree').value||undefined,
         effort:$('mTaskEffort').value||undefined, task:$('mTaskBody').value,
+        cwd:$('mTaskCwd').value.trim()||undefined,
       }]})});
     }
     closeModal('modalTaskLaunch');

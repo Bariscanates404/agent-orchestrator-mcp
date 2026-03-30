@@ -48,10 +48,11 @@ async function resolveTaskBackend(rawTask, stateRoot) {
 }
 
 async function createTaskRecord(rawTask, { repoRoot, stateRoot, runnerPath }) {
+  const effectiveCwd = rawTask.cwd || repoRoot;
   await ensureRepoStatePaths(repoRoot, stateRoot);
   const taskId = makeTaskId(rawTask.label || rawTask.backend || 'agent');
   const paths = buildTaskPaths(taskId, repoRoot, stateRoot);
-  const worktreeMode = rawTask.worktreeMode || 'git_worktree';
+  const worktreeMode = rawTask.cwd ? 'reuse_repo' : rawTask.worktreeMode || 'git_worktree';
   const branchLabel = rawTask.branchName || `${sanitizeName(rawTask.label || rawTask.backend)}-${taskId.slice(0, 20)}`;
   const now = nowIso();
   const task = {
@@ -63,7 +64,7 @@ async function createTaskRecord(rawTask, { repoRoot, stateRoot, runnerPath }) {
     fallbackUsed: Boolean(rawTask.fallbackUsed),
     prompt: rawTask.task,
     promptSummary: summarizePrompt(rawTask.task),
-    repoRoot,
+    repoRoot: effectiveCwd,
     stateRoot,
     baseRef: rawTask.baseRef || 'HEAD',
     model: rawTask.model || null,
@@ -92,7 +93,7 @@ async function createTaskRecord(rawTask, { repoRoot, stateRoot, runnerPath }) {
     },
     worktree: {
       mode: worktreeMode,
-      path: worktreeMode === 'git_worktree' ? paths.worktreePath : repoRoot,
+      path: worktreeMode === 'git_worktree' ? paths.worktreePath : effectiveCwd,
       branch: worktreeMode === 'git_worktree' ? `mcp/${branchLabel}` : null,
       created: false,
     },
@@ -102,10 +103,10 @@ async function createTaskRecord(rawTask, { repoRoot, stateRoot, runnerPath }) {
   await writeJsonAtomic(paths.taskFile, task);
 
   const child = spawnDetached(process.execPath, [runnerPath, paths.taskFile], {
-    cwd: repoRoot,
+    cwd: effectiveCwd,
     env: {
       ...process.env,
-      TEAMLEAD_REPO_ROOT: repoRoot,
+      TEAMLEAD_REPO_ROOT: effectiveCwd,
       TEAMLEAD_STATE_ROOT: stateRoot,
     },
     stdoutPath: paths.runnerStdout,
@@ -145,6 +146,12 @@ const taskInputSchema = z
     fallbackBackend: z.enum(['claude', 'codex']).optional(),
     task: z.string().min(1),
     label: z.string().min(1).optional(),
+    cwd: z
+      .string()
+      .optional()
+      .describe(
+        'Working directory override. If set, the agent runs in this directory instead of the default repoRoot.',
+      ),
     worktreeMode: z.enum(['git_worktree', 'reuse_repo']).optional(),
     allowDirtyBase: z.boolean().optional(),
     baseRef: z.string().optional(),
