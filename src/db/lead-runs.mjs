@@ -1,3 +1,5 @@
+import { nowIso } from '../shared/time.mjs';
+
 function normalizeLeadRunRow(row) {
   if (!row) {
     return null;
@@ -95,6 +97,24 @@ export function upsertLeadRun(db, run) {
     evaluation_round: run.evaluationRound ?? 0,
     max_eval_rounds: run.maxEvalRounds ?? 2,
   });
+}
+
+export function reopenLeadRun(db, runId, { phase = 'executing', objective = null } = {}) {
+  db.prepare(`
+    UPDATE lead_runs
+    SET status = 'running',
+        phase = ?,
+        paused = 0,
+        completed_at = NULL,
+        error = NULL,
+        evaluation_round = 0,
+        updated_at = ?
+    WHERE id = ?
+  `).run(phase, nowIso(), runId);
+
+  if (objective) {
+    db.prepare('UPDATE lead_runs SET objective = ? WHERE id = ?').run(objective, runId);
+  }
 }
 
 export function getLeadRunById(db, runId) {

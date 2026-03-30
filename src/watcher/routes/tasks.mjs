@@ -1,7 +1,9 @@
-import { getTaskById, listTaskEvents, openDb } from '../../db/index.mjs';
+import { countActiveTasks, getTaskById, listTaskEvents, openDb } from '../../db/index.mjs';
 import { getRuntimeSettings } from '../../shared/settings.mjs';
 import { readBody, sendJson } from '../http-helpers.mjs';
 import { cancelTask, cleanupTask, escalateTask, launchTasks } from '../mcp-proxy.mjs';
+
+const MAX_ACTIVE_SESSIONS = Number(process.env.ORCHESTRATOR_MAX_SESSIONS || 12);
 
 function extractSessionHints(task, events = []) {
   const sessionHints = {
@@ -74,6 +76,23 @@ export function registerTaskRoutes(router, { repoRoot, stateRoot }) {
 
   router.post('/api/tasks/launch', async (req, res) => {
     const body = await readBody(req);
+    const requestedCount = (body.tasks || []).length;
+
+    // Enforce max active sessions limit
+    const db = openDb(stateRoot);
+    try {
+      const activeCount = countActiveTasks(db, repoRoot);
+      if (activeCount + requestedCount > MAX_ACTIVE_SESSIONS) {
+        return sendJson(res, 429, {
+          error: `Aktif oturum limiti asildi. Mevcut: ${activeCount}, istenen: ${requestedCount}, limit: ${MAX_ACTIVE_SESSIONS}. Onceki gorevlerin bitmesini bekleyin.`,
+          activeCount,
+          limit: MAX_ACTIVE_SESSIONS,
+        });
+      }
+    } finally {
+      db.close();
+    }
+
     const result = await launchTasks(repoRoot, stateRoot, body.tasks || []);
     return sendJson(res, 200, result);
   });

@@ -1,18 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
 import {
   getLeadRunById,
   getNextItemTaskIndex,
   insertLeadRunEvent,
   openDb,
+  reopenLeadRun,
   upsertLeadRun,
   upsertLeadRunItem,
 } from '../../db/index.mjs';
 import { shortenText } from '../../lib/index.mjs';
-import { LEAD_TERMINAL_STATES } from '../../shared/constants.mjs';
+import { LEAD_EVENT, LEAD_TERMINAL_STATES } from '../../shared/constants.mjs';
 import { toTextResult } from '../../shared/mcp-result.mjs';
+import { spawnDetached } from '../../shared/spawn-detached.mjs';
 import { nowIso } from '../../shared/time.mjs';
 
-export function registerLeadRunLifecycleTools(server, { repoRoot, stateRoot }) {
+export function registerLeadRunLifecycleTools(server, { repoRoot, stateRoot, leadRunnerPath }) {
   server.registerTool(
     'pause_lead_run',
     {
@@ -197,6 +201,117 @@ export function registerLeadRunLifecycleTools(server, { repoRoot, stateRoot }) {
       } finally {
         db.close();
       }
+    },
+  );
+
+  server.registerTool(
+    'continue_lead_run',
+    {
+      description:
+        'Reopen a completed, failed, or cancelled lead run. Optionally provide a new objective (triggers re-planning) or manual items (added as pending subtasks).',
+      inputSchema: z
+        .object({
+          runId: z.string().min(1),
+          objective: z
+            .string()
+            .optional()
+            .describe('New objective. If provided, the lead re-plans from scratch with this goal.'),
+          items: z
+            .array(z.object({ label: z.string().optional(), instruction: z.string().min(1) }))
+            .optional()
+            .describe('Manual subtasks to add. Skips re-planning if provided.'),
+        })
+        .strict(),
+    },
+    async (input) => {
+      const db = openDb(stateRoot);
+      try {
+        const run = getLeadRunById(db, input.runId);
+        if (!run) {
+          throw new Error(`Lead run not found: ${input.runId}`);
+        }
+        if (!LEAD_TERMINAL_STATES.has(run.status)) {
+          return toTextResult('continue_lead_run', {
+            runId: run.id,
+            continued: false,
+            reason: `Lead run is still ${run.status}, not in a terminal state.`,
+          });
+        }
+
+        // Determine phase: if new objective (no manual items) → re-plan; otherwise → execute
+        const hasManualItems = Array.isArray(input.items) && input.items.length > 0;
+        const phase = input.objective && !hasManualItems ? 'planning' : 'executing';
+
+        reopenLeadRun(db, input.runId, {
+          phase,
+          objective: input.objective || null,
+        });
+
+        // Add manual items as pending
+        if (hasManualItems) {
+          const baseIndex = getNextItemTaskIndex(db, input.runId);
+          for (let i = 0; i < input.items.length; i++) {
+            upsertLeadRunItem(db, {
+              runId: input.runId,
+              taskIndex: baseIndex + i,
+              label: input.items[i].label || `continue-item-${baseIndex + i + 1}`,
+              instruction: input.items[i].instruction,
+              status: 'pending',
+              round: 1,
+            });
+          }
+        }
+
+        insertLeadRunEvent(db, {
+          runId: input.runId,
+          repoRoot,
+          eventType: LEAD_EVENT.RUN_CONTINUED,
+          content: `Lead run reopened from ${run.status} by operator.${input.objective ? ' New objective set.' : ''}${hasManualItems ? ` ${input.items.length} manual items added.` : ''}`,
+          metadata: {
+            previousStatus: run.status,
+            newObjective: input.objective || null,
+            manualItemCount: hasManualItems ? input.items.length : 0,
+            phase,
+          },
+        });
+      } finally {
+        db.close();
+      }
+
+      // Spawn a new lead runner subprocess
+      const logDir = path.join(stateRoot, 'lead-logs');
+      fs.mkdirSync(logDir, { recursive: true });
+      const child = spawnDetached(process.execPath, [leadRunnerPath, input.runId], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          TEAMLEAD_REPO_ROOT: repoRoot,
+          TEAMLEAD_STATE_ROOT: stateRoot,
+        },
+        stdoutPath: path.join(logDir, `${input.runId}-stdout.log`),
+        stderrPath: path.join(logDir, `${input.runId}-stderr.log`),
+      });
+
+      const dbUpdate = openDb(stateRoot);
+      try {
+        const freshRun = getLeadRunById(dbUpdate, input.runId);
+        if (freshRun) {
+          upsertLeadRun(dbUpdate, {
+            ...freshRun,
+            runnerPid: child.pid,
+            updatedAt: nowIso(),
+          });
+        }
+      } finally {
+        dbUpdate.close();
+      }
+
+      return toTextResult('continue_lead_run', {
+        runId: input.runId,
+        continued: true,
+        phase,
+        runnerPid: child.pid,
+      });
     },
   );
 }

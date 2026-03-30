@@ -315,6 +315,7 @@ a:hover{text-decoration:underline;}
 
 /* Hint text */
 .hint{color:var(--text-muted);font-size:12px;}
+.mono{font-family:'SF Mono','Fira Code',monospace;font-size:11px;}
 
 /* ============================================================
    ORCHESTRATION SCREEN
@@ -972,26 +973,149 @@ function fmtAgo(ts) {
   if(s < 3600) return Math.floor(s/60)+'dk once';
   return Math.floor(s/3600)+'sa once';
 }
-function fmtEventContent(content, eventType) {
+function fmtEventContent(content, eventType, metadata) {
   if(!content) return '';
-  /* Try to parse stdout_chunk JSON and extract the readable result */
+  /* Ensure metadata is an object (may come as string or already parsed) */
+  const meta = typeof metadata === 'string' ? safeParse(metadata) : (metadata || null);
+
+  /* Task stdout_chunk: parse Claude/Codex JSON output for readable result */
   if(eventType === 'stdout_chunk') {
     try {
       const obj = JSON.parse(content);
       if(obj.type === 'result' && obj.result) {
         const dur = obj.duration_ms ? ' ('+Math.round(obj.duration_ms/1000)+'s)' : '';
         const cost = obj.total_cost_usd ? ' $'+obj.total_cost_usd.toFixed(2) : '';
-        const turns = obj.num_turns ? ' '+obj.num_turns+' turns' : '';
-        const header = (obj.subtype==='success'?'BASARILI':'BASARISIZ')+dur+cost+turns;
-        return '<div style="color:var(--text-muted);font-size:11px;margin-bottom:4px;">'+esc(header)+'</div>'+esc(obj.result);
+        const turns = obj.num_turns ? ' '+obj.num_turns+' tur' : '';
+        const ok = obj.subtype==='success';
+        const header = (ok?'BASARILI':'BASARISIZ')+dur+cost+turns;
+        const color = ok?'var(--color-completed)':'var(--color-failed)';
+        let txt = obj.result || '';
+        if(txt.length > 3000) txt = txt.substring(0,3000) + '\n... (kisaltildi)';
+        return '<div style="color:'+color+';font-size:12px;font-weight:600;margin-bottom:4px;">'+esc(header)+'</div><div style="white-space:pre-wrap;word-break:break-word;">'+esc(txt)+'</div>';
       }
-      /* For other JSON objects, show pretty-printed */
+      if(obj.type === 'system' && obj.subtype === 'init') {
+        return '<span style="color:var(--text-muted);">Oturum baslatildi (model: '+esc(obj.model||'?')+', araclari yukluyor...)</span>';
+      }
+      if(obj.type === 'assistant' && obj.message?.content) {
+        const parts = obj.message.content;
+        const textParts = (Array.isArray(parts)?parts:[parts]).filter(p=>p.type==='text'||typeof p==='string');
+        if(textParts.length > 0) {
+          const txt = textParts.map(p=>typeof p==='string'?p:p.text||'').join('\n');
+          if(txt.length > 2000) return '<div style="white-space:pre-wrap;">'+esc(txt.substring(0,2000))+'</div><div class="hint">... (kisaltildi)</div>';
+          return '<div style="white-space:pre-wrap;">'+esc(txt)+'</div>';
+        }
+        const toolParts = (Array.isArray(parts)?parts:[]).filter(p=>p.type==='tool_use');
+        if(toolParts.length > 0) {
+          return '<span style="color:var(--text-muted);">Arac kullanimi: '+toolParts.map(t=>esc(t.name||'?')).join(', ')+'</span>';
+        }
+      }
       return esc(JSON.stringify(obj, null, 2));
-    } catch { /* not JSON, show raw */ }
+    } catch { /* not JSON */ }
   }
-  /* Truncate very long raw content */
+
+  /* Lead run event types — human-friendly Turkish display */
+  const leadMap = {
+    'lead_run_created': () => '<span style="color:var(--accent);">Oturum olusturuldu.</span> ' + esc(content),
+    'run_started': () => '<span style="color:var(--color-running);">Oturum baslatildi.</span> ' + esc(content),
+    'planning_started': () => '<span style="color:var(--color-planning);">Planlama baslatildi.</span> Lead agent hedefi alt gorevlere ayiriyor...',
+    'planning_completed': () => {
+      const m = meta;
+      const count = m?.subtaskCount || '?';
+      const labels = m?.labels || [];
+      let s = '<span style="color:var(--color-completed);">Planlama tamamlandi!</span> '+count+' alt gorev olusturuldu.';
+      if(labels.length > 0) s += '<div class="hint" style="margin-top:4px;">Gorevler: '+labels.map(l=>esc(l)).join(', ')+'</div>';
+      return s;
+    },
+    'execution_started': () => '<span style="color:var(--color-running);">Calistirma fazina gecildi.</span> Isciler paralel calisiyor...',
+    'execution_wave': () => {
+      const m = meta;
+      return '<span style="color:var(--color-running);">Dalga '+(m?.wave||'?')+':</span> '+esc(m?.launched||'?')+' isci baslatildi (aktif: '+esc(m?.activeCount||'?')+', bekleyen: '+esc(m?.pendingCount||'?')+')';
+    },
+    'execution_completed': () => {
+      const m = meta;
+      return '<span style="color:var(--color-completed);">Calistirma tamamlandi.</span> '+
+        (m ? esc(m.completed)+' basarili, '+esc(m.failed)+' basarisiz (toplam '+esc(m.total)+')' : esc(content));
+    },
+    'item_launched': () => {
+      const m = meta;
+      return '<span style="color:var(--color-running);">Isci baslatildi:</span> #'+(m?.taskIndex!=null ? m.taskIndex+1 : '?')+' (round '+(m?.round||1)+', backend: '+(m?.backend||'?')+')';
+    },
+    'item_finished': () => {
+      const m = meta;
+      const ok = m?.status === 'completed';
+      const color = ok ? 'var(--color-completed)' : 'var(--color-failed)';
+      let s = '<span style="color:'+color+';">'+(ok?'Isci tamamlandi':'Isci basarisiz')+':</span> #'+(m?.taskIndex!=null ? m.taskIndex+1 : '?');
+      if(m?.resultSnippet) s += '<div style="margin-top:4px;color:var(--text-secondary);font-size:12px;">'+esc(m.resultSnippet)+'</div>';
+      if(m?.error) s += '<div style="color:var(--color-failed);font-size:11px;">'+esc(m.error)+'</div>';
+      return s;
+    },
+    'item_retry_queued': () => {
+      const m = meta;
+      return '<span style="color:var(--color-evaluating);">Yeniden deneme:</span> #'+(m?.taskIndex!=null ? m.taskIndex+1 : '?')+' round '+(m?.nextRound||'?')+' icin kuyrukta.';
+    },
+    'item_added': () => '<span style="color:var(--accent);">Yeni gorev eklendi.</span> ' + esc(content),
+    'evaluation_started': () => {
+      const m = meta;
+      return '<span style="color:var(--color-evaluating);">Degerlendirme baslatildi</span> (round '+(m?.evaluationRound||'?')+'/'+(m?.maxEvalRounds||'?')+')';
+    },
+    'evaluation_verdict': () => {
+      const m = meta;
+      const v = (m?.verdict||'').toUpperCase();
+      const vColor = v==='PASS'?'var(--color-completed)':v==='FAIL'?'var(--color-failed)':'var(--color-evaluating)';
+      let s = '<div style="display:inline-flex;align-items:center;gap:6px;"><span style="background:'+vColor+';color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;font-size:12px;">'+esc(v)+'</span>';
+      s += '<span>'+esc(m?.reason||'')+'</span></div>';
+      if(m?.followUpCount) s += '<div class="hint" style="margin-top:4px;">'+m.followUpCount+' follow-up gorev olusturuldu.</div>';
+      return s;
+    },
+    'followup_items_created': () => {
+      const m = meta;
+      return '<span style="color:var(--color-evaluating);">'+esc(m?.newItemCount||'?')+' follow-up gorev eklendi.</span> Yeniden calistirma basliyor...';
+    },
+    'run_finished': () => {
+      const m = meta;
+      const ok = m?.status === 'completed';
+      const color = ok?'var(--color-completed)':'var(--color-failed)';
+      return '<strong style="color:'+color+';font-size:13px;">'+(ok?'OTURUM TAMAMLANDI':'OTURUM SONA ERDI')+'</strong><div>'+esc(content)+'</div>';
+    },
+    'run_failed': () => '<strong style="color:var(--color-failed);">HATA!</strong> '+esc(content),
+    'paused': () => '<span style="color:var(--color-evaluating);">Oturum duraklatildi.</span>',
+    'resumed': () => '<span style="color:var(--color-running);">Oturum devam ettiriliyor.</span>',
+    'cancelled': () => '<span style="color:var(--color-failed);">Oturum iptal edildi.</span>',
+    'run_continued': () => {
+      const m = meta;
+      return '<span style="color:var(--accent);">Oturum yeniden baslatildi!</span>'+(m?.newObjective?' Yeni hedef belirlendi.':'')+(m?.manualItemCount?' '+m.manualItemCount+' gorev eklendi.':'');
+    },
+  };
+
+  /* Task event types */
+  const taskMap = {
+    'task_created': () => '<span style="color:var(--accent);">Gorev olusturuldu.</span> '+esc(content),
+    'status_changed': () => esc(content),
+    'agent_started': () => '<span style="color:var(--color-running);">Agent baslatildi.</span> '+esc(content),
+    'escalated': () => '<span style="color:var(--color-evaluating);">Gorev yukseltildi.</span> '+esc(content),
+    'cancelled': () => '<span style="color:var(--color-failed);">Gorev iptal edildi.</span>',
+    'cleanup': () => '<span style="color:var(--text-muted);">Temizlik yapildi.</span> '+esc(content),
+    'runner_started': () => '<span style="color:var(--color-running);">Runner baslatildi.</span>',
+    'runner_error': () => '<span style="color:var(--color-failed);">Runner hatasi!</span> '+esc(content),
+    'stderr_chunk': () => '<span style="color:var(--color-failed);font-size:11px;">'+esc(content.length>500?content.substring(0,500)+'...':content)+'</span>',
+  };
+
+  const formatter = leadMap[eventType] || taskMap[eventType];
+  if(formatter) return formatter();
+
+  /* Default: truncate long content */
   if(content.length > 2000) return esc(content.substring(0,2000)) + '\n... ('+content.length+' karakter)';
   return esc(content);
+}
+function fmtResultSummary(run) {
+  if(!run.resultSummary) return '';
+  const status = run.status;
+  const icon = status === 'completed' ? '&#10003;' : status === 'failed' ? '&#10007;' : '&#9679;';
+  const color = status === 'completed' ? 'var(--color-completed)' : status === 'failed' ? 'var(--color-failed)' : 'var(--text-muted)';
+  let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:18px;color:'+color+';">'+icon+'</span><strong style="color:'+color+';font-size:14px;">'+(status==='completed'?'Basarili':'Basarisiz')+'</strong></div>';
+  html += '<div style="color:var(--text-primary);">'+esc(run.resultSummary)+'</div>';
+  if(run.error) html += '<div style="margin-top:6px;color:var(--color-failed);font-size:12px;">Hata: '+esc(run.error)+'</div>';
+  return html;
 }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 function safeParse(str) { try { return JSON.parse(str); } catch(e) { console.error('JSON parse error:', e); return null; } }
@@ -1161,8 +1285,9 @@ function applyDashboard(d) {
   const tasks = d.tasks || [];
   const counts = d.counts || {};
   const activeCount = d.activeWorkersCount || 0;
+  const limits = d.limits || {};
   $('statTotalTasks').textContent = tasks.length;
-  $('statActiveWorkers').textContent = activeCount;
+  $('statActiveWorkers').textContent = activeCount + (limits.maxActiveSessions ? '/' + limits.maxActiveSessions : '');
 
   /* Last updated indicator */
   const updatedEl = document.querySelector('.last-updated');
@@ -1267,6 +1392,7 @@ async function refreshSelectedTask() {
 
 function renderTaskDetail(task, events, payload) {
   const panel = $('taskDetailPanel');
+  const sessionHints = payload?.sessionHints || {};
   const canCancel = !TERMINAL.has(task.status);
   const canCleanup = TERMINAL.has(task.status) && task.worktree?.mode === 'git_worktree';
   const prompt = (typeof task.prompt === 'string' && task.prompt.trim()) ? task.prompt : 'Prompt kaydedilmedi.';
@@ -1288,21 +1414,29 @@ function renderTaskDetail(task, events, payload) {
           <button class="btn btn-sm btn-danger" id="tdCancel" ${canCancel?'':'disabled'} data-tip="Calisan gorevi iptal eder. Runner sureci sonlandirilir. Sadece terminal olmayan gorevlerde calisir.">&#304;ptal</button>
           <button class="btn btn-sm" id="tdCleanup" ${canCleanup?'':'disabled'} data-tip="Git worktree kalintisini temizler. Sadece tamamlanan git_worktree gorevlerinde aktif. Branch silinmez.">Temizle</button>
         </div>
-        <pre class="pre">${esc(JSON.stringify({id:task.id,parentTaskId:task.parentTaskId,worktree:task.worktree,error:task.error,updatedAt:task.updatedAt,completedAt:task.completedAt},null,2))}</pre>
+        ${sessionHints.claudeSessionId && TERMINAL.has(task.status) ? '<div style="margin-top:10px;padding:10px;background:var(--bg-elevated);border-radius:var(--radius-sm);border:1px solid var(--border);"><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><span style="font-size:11px;color:var(--text-muted);">Session: '+esc(sessionHints.claudeSessionId.slice(0,8))+'...</span><span class="badge badge-completed" style="font-size:10px;">Devam ettirilebilir</span></div><div style="display:flex;gap:8px;"><input class="form-input" id="tdFollowUp" type="text" placeholder="Follow-up mesaj yaz..." style="flex:1;font-size:12px;padding:6px 10px;"/><button class="btn btn-sm btn-primary" id="tdResume" data-tip="Ayni session context ile yeni gorev baslatir. AI onceki konusmayi hatirlar.">Devam Et</button></div></div>' : ''}
+        <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;font-size:12px;">
+          <div class="hint">ID: <span class="mono" style="color:var(--text-secondary)">${esc(task.id?.slice(0,16))}...</span></div>
+          ${task.parentTaskId ? '<div class="hint">Parent: <span class="mono" style="color:var(--text-secondary)">'+esc(task.parentTaskId?.slice(0,16))+'...</span></div>' : ''}
+          <div class="hint">Worktree: <strong style="color:var(--text-primary)">${esc(task.worktree?.mode||'yok')}</strong></div>
+          ${task.worktree?.branch ? '<div class="hint">Branch: <span class="mono" style="color:var(--text-secondary)">'+esc(task.worktree.branch)+'</span></div>' : ''}
+          ${task.completedAt ? '<div class="hint">Bitis: '+fmtTime(task.completedAt)+'</div>' : ''}
+          ${task.error ? '<div style="color:var(--color-failed);">Hata: '+esc(task.error)+'</div>' : ''}
+        </div>
       </div>
     </div>
     <div class="detail-section">
       <div class="card">
         <div class="card-title" style="margin-bottom:8px;">Prompt</div>
-        <pre class="pre">${esc(prompt)}</pre>
+        <pre class="pre" style="white-space:pre-wrap;word-break:break-word;">${esc(prompt)}</pre>
       </div>
     </div>
-    ${exec ? '<div class="detail-section"><div class="card"><div class="card-title" style="margin-bottom:8px;">Execution</div><pre class="pre">'+esc(JSON.stringify(exec,null,2))+'</pre></div></div>' : ''}
+    ${exec ? '<div class="detail-section"><div class="card"><div class="card-title" style="margin-bottom:8px;">Calistirma Bilgisi</div><div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;">'+(exec.command?'<div class="hint">Komut: <span class="mono">'+esc(exec.command)+'</span></div>':'')+(exec.model?'<div class="hint">Model: <strong>'+esc(exec.model)+'</strong></div>':'')+(exec.effort?'<div class="hint">Effor: <strong>'+esc(exec.effort)+'</strong></div>':'')+'</div></div></div>' : ''}
     <div class="detail-section">
       <div class="card">
         <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
         <div class="event-list">
-          ${events.map(ev => '<div class="event-item '+esc(ev.stream)+'"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.stream)+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+fmtEventContent(ev.content, ev.eventType)+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
+          ${events.map(ev => '<div class="event-item '+esc(ev.stream)+'"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.stream)+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+fmtEventContent(ev.content, ev.eventType, ev.metadata)+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
         </div>
       </div>
     </div>`;
@@ -1311,6 +1445,29 @@ function renderTaskDetail(task, events, payload) {
   $('tdEscalate')?.addEventListener('click', () => openEscalationModal(task));
   $('tdCancel')?.addEventListener('click', () => cancelTask(task));
   $('tdCleanup')?.addEventListener('click', () => cleanupTask(task));
+  $('tdResume')?.addEventListener('click', async () => {
+    const msg = $('tdFollowUp')?.value?.trim();
+    if(!msg) { showError(new Error('Bir follow-up mesaj yazin.')); return; }
+    $('tdResume').disabled = true;
+    try {
+      await request('/api/tasks/launch',{method:'POST',body:JSON.stringify({tasks:[{
+        label: task.label+'-followup',
+        backend: task.backend || 'claude',
+        task: msg,
+        cwd: task.worktree?.path || task.repoRoot || undefined,
+        worktreeMode: 'reuse_repo',
+        effort: task.effort || undefined,
+        resumeSessionId: sessionHints.claudeSessionId,
+        parentTaskId: task.id,
+      }]})});
+      showSuccess('Follow-up gorev baslatildi.');
+      $('tdFollowUp').value = '';
+      await refreshDashboard();
+    } catch(e) { showError(e); } finally { $('tdResume').disabled = false; }
+  });
+  $('tdFollowUp')?.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('tdResume')?.click(); }
+  });
 }
 
 async function cancelTask(task) {
@@ -1417,6 +1574,25 @@ function renderLeadRunDetail(run, items, events) {
         <button class="btn btn-sm" id="ldAddItem" ${canCancel?'':'disabled'} data-tip="Oturuma yeni alt gorev ekler. Sonraki calistirma dongusunde ise alinir.">G&#246;rev Ekle</button>
       </div>
     </div></div>
+    ${isTerminal ? `
+    <div class="detail-section"><div class="card" style="border:1px solid var(--accent);background:rgba(99,133,255,0.06);">
+      <div class="card-title" style="margin-bottom:8px;">Oturumu Devam Ettir</div>
+      <div class="hint" style="margin-bottom:8px;">Tamamlanan veya basarisiz oturuma yeni hedef verebilir veya ek gorevler ekleyebilirsiniz. Yeni hedef yazarsaniz sistem sifirdan planlama yapar.</div>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label class="form-label">Yeni Hedef (opsiyonel)</label>
+        <textarea id="ldContObjective" class="form-input" rows="2" placeholder="Yeni bir hedef girin veya bos birakin..." data-tip="Yeni hedef yazarsaniz lead agent sifirdan planlama yapar. Bos birakip alt gorevler eklerseniz direkt calistirma fazina gecer."></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label class="form-label">Ek Alt Gorevler (opsiyonel, satirbasina bir talimat)</label>
+        <textarea id="ldContItems" class="form-input" rows="3" placeholder="Her satira bir alt gorev yazin...&#10;Ornek: Login sayfasindaki bug'i fix et&#10;Ornek: Test coverage ekle" data-tip="Her satir ayri bir alt gorev olur. Yeni hedef ile birlikte kullanmak yerine, dogrudan calistirilacak gorevler icin."></textarea>
+      </div>
+      <button class="btn btn-accent" id="ldContinue" data-tip="Oturumu yeniden baslatir. Yeni hedef ve/veya ek gorevler ile devam eder.">Oturumu Yeniden Baslat</button>
+    </div></div>` : ''}
+    ${run.resultSummary ? `
+    <div class="detail-section"><div class="card">
+      <div class="card-title" style="margin-bottom:8px;">Sonuc Ozeti</div>
+      <div style="padding:10px;background:var(--bg-primary);border-radius:6px;font-size:13px;line-height:1.6;">${fmtResultSummary(run)}</div>
+    </div></div>` : ''}
     <div class="detail-section"><div class="card">
       <div class="card-title" style="margin-bottom:8px;">Hedef</div>
       <pre class="pre">${esc(run.objective)}</pre>
@@ -1424,7 +1600,13 @@ function renderLeadRunDetail(run, items, events) {
     <div class="detail-section"><div class="card">
       <div class="card-title" style="margin-bottom:8px;">&#304;lerleme (${pct}%)</div>
       <div class="progress" style="height:8px;"><div class="progress-fill progress-fill-green" style="width:${pct}%"></div></div>
-      <pre class="pre" style="margin-top:8px;">${esc(JSON.stringify({id:run.id,status:run.status,phase:run.phase,evaluationRound:run.evaluationRound,maxEvalRounds:run.maxEvalRounds,maxRounds:run.maxRounds,error:run.error},null,2))}</pre>
+      <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;">
+        <div class="hint">Durum: <strong style="color:var(--text-primary)">${esc(run.status)}</strong></div>
+        <div class="hint">Faz: <strong style="color:var(--text-primary)">${esc(run.phase||'-')}</strong></div>
+        <div class="hint">Degerlendirme: <strong style="color:var(--text-primary)">${run.evaluationRound}/${run.maxEvalRounds}</strong></div>
+        <div class="hint">Max Round: <strong style="color:var(--text-primary)">${run.maxRounds}</strong></div>
+        ${run.error ? '<div style="color:var(--color-failed);font-size:12px;">Hata: '+esc(run.error)+'</div>' : ''}
+      </div>
     </div></div>
     <div class="detail-section"><div class="card">
       <div class="card-title" style="margin-bottom:8px;">Alt G&#246;revler (${items.length})</div>
@@ -1438,7 +1620,7 @@ function renderLeadRunDetail(run, items, events) {
     <div class="detail-section"><div class="card">
       <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
       <div class="event-list">
-        ${events.map(ev => '<div class="event-item system"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+fmtEventContent(ev.content, ev.eventType)+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
+        ${events.map(ev => '<div class="event-item system"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+fmtEventContent(ev.content, ev.eventType, ev.metadata)+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
       </div>
     </div></div>`;
 
@@ -1447,6 +1629,36 @@ function renderLeadRunDetail(run, items, events) {
   $('ldResume')?.addEventListener('click', () => leadAction(run.id, 'resume'));
   $('ldCancel')?.addEventListener('click', () => leadAction(run.id, 'cancel'));
   $('ldAddItem')?.addEventListener('click', () => openAddItemModal(run.id));
+
+  // Continue (reopen) handler for terminal lead runs
+  $('ldContinue')?.addEventListener('click', async () => {
+    const objEl = $('ldContObjective');
+    const itemsEl = $('ldContItems');
+    const newObjective = objEl?.value?.trim() || '';
+    const rawItems = itemsEl?.value?.trim() || '';
+    const itemLines = rawItems ? rawItems.split('\n').map(l=>l.trim()).filter(Boolean) : [];
+
+    if(!newObjective && itemLines.length === 0) {
+      showError(new Error('Yeni bir hedef veya en az bir alt gorev girin.'));
+      return;
+    }
+
+    $('ldContinue').disabled = true;
+    $('ldContinue').textContent = 'Baslatiliyor...';
+    try {
+      const body = {};
+      if(newObjective) body.objective = newObjective;
+      if(itemLines.length > 0) body.items = itemLines.map((line, i) => ({ label: 'manual-'+(i+1), instruction: line }));
+      await request('/api/leads/'+encodeURIComponent(run.id)+'/continue', { method:'POST', body:JSON.stringify(body) });
+      showSuccess('Oturum yeniden baslatildi! ' + (newObjective ? 'Yeni hedef ile planlama yapilacak.' : itemLines.length + ' gorev eklendi.'));
+      await refreshSelectedLeadRun();
+      await refreshLeadRuns();
+    } catch(e) { showError(e); }
+    finally {
+      const btn = $('ldContinue');
+      if(btn) { btn.disabled = false; btn.textContent = 'Oturumu Yeniden Baslat'; }
+    }
+  });
 
   panel.querySelectorAll('.worker-link').forEach(n => {
     n.addEventListener('click', e => { e.preventDefault(); navigate('tasks'); selectTask(n.dataset.workerId); });

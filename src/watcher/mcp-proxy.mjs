@@ -132,3 +132,17 @@ export async function addLeadRunItem(repoRoot, stateRoot, runId, body) {
     return unwrapToolResult(result);
   });
 }
+
+export async function continueLeadRun(repoRoot, stateRoot, runId, body = {}) {
+  return withOrchestratorClient(repoRoot, stateRoot, async (client) => {
+    const result = await client.callTool({
+      name: 'continue_lead_run',
+      arguments: {
+        runId,
+        objective: body.objective || undefined,
+        items: body.items || undefined,
+      },
+    });
+    return unwrapToolResult(result);
+  });
+}

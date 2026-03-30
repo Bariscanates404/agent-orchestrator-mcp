@@ -34,6 +34,7 @@ export function buildDashboardPayload(repoRoot, stateRoot, limit = 40) {
         startedAt: task.startedAt,
       }));
 
+    const maxSessions = Number(process.env.ORCHESTRATOR_MAX_SESSIONS || 12);
     return {
       generatedAt: nowIso(),
       repoRoot,
@@ -42,6 +43,12 @@ export function buildDashboardPayload(repoRoot, stateRoot, limit = 40) {
         leadBackend: settings.leadBackend || 'codex',
         defaultWorkerBackend: settings.defaultWorkerBackend || 'claude',
         codexFallbackBackend: settings.codexFallbackBackend || 'claude',
+      },
+      limits: {
+        maxActiveSessions: maxSessions,
+        activeCount: activeWorkers.length,
+        remaining: maxSessions - activeWorkers.length,
+        idleTimeoutMs: Number(process.env.ORCHESTRATOR_IDLE_TIMEOUT_MS || 3_600_000),
       },
       counts: getTaskStatusCounts(db, repoRoot),
       activeWorkersCount: activeWorkers.length,

@@ -1,3 +1,4 @@
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { closeOrchestratorClient, connectOrchestratorClient } from '../client/index.mjs';
@@ -10,8 +11,9 @@ import {
   upsertLeadRun,
   upsertLeadRunItem,
 } from '../db/index.mjs';
-import { pathExists, resolveRepoRoot, resolveStateRoot } from '../lib/index.mjs';
+import { initWorkspace, pathExists, resolveRepoRoot, resolveStateRoot, workspacePath } from '../lib/index.mjs';
 import { parseJsonFromWorkerOutput } from '../lib/parse-output.mjs';
+import { collectSessionData } from '../server/tools/session-export.mjs';
 import { nowIso } from '../shared/time.mjs';
 import { executeItems, launchWorkerAndWaitForResult } from './execution.mjs';
 import { composeEvaluatorPrompt, composePlannerPrompt } from './prompts.mjs';
@@ -34,6 +36,19 @@ function updateRun(db, run, patch) {
   };
   upsertLeadRun(db, merged);
   return merged;
+}
+
+function autoSaveSession(db, leadRunId, targetRepoRoot) {
+  try {
+    const data = collectSessionData(db, leadRunId);
+    const dir = path.join(targetRepoRoot, '.orchestrator-sessions');
+    fsSync.mkdirSync(dir, { recursive: true });
+    const outputFile = path.join(dir, `${leadRunId}.json`);
+    fsSync.writeFileSync(outputFile, JSON.stringify(data, null, 2), 'utf-8');
+    console.error(`[lead-runner] Session auto-saved to ${outputFile}`);
+  } catch (err) {
+    console.error(`[lead-runner] Failed to auto-save session: ${err.message}`);
+  }
 }
 
 async function loadRulesDoc(run) {
@@ -95,10 +110,15 @@ async function main() {
       },
     });
 
-    // PHASE 1: PLANNING — generate subtasks if none exist
-    let items = listLeadRunItems(db, runId);
+    // Initialize shared workspace for inter-agent collaboration
+    const wsPath = workspacePath(repoRoot, runId);
+    await initWorkspace(runId, repoRoot);
 
-    if (items.length === 0) {
+    // PHASE 1: PLANNING — generate subtasks if none exist or if reopened with planning phase
+    let items = listLeadRunItems(db, runId);
+    const needsPlanning = items.length === 0 || run.phase === 'planning';
+
+    if (needsPlanning) {
       run = updateRun(db, run, { status: 'planning', phase: 'planning' });
       insertLeadRunEvent(db, {
         runId,
@@ -173,7 +193,7 @@ async function main() {
         metadata: { evaluationRound: evalRound },
       });
 
-      await executeItems(db, clientContext, run, rulesDoc, runId, repoRoot, pollMs);
+      await executeItems(db, clientContext, run, rulesDoc, runId, repoRoot, pollMs, wsPath);
 
       items = listLeadRunItems(db, runId);
       const completedCount = items.filter((item) => item.status === 'completed').length;
@@ -201,6 +221,7 @@ async function main() {
           content: `Lead run failed: all ${items.length} items failed.`,
           metadata: { status: 'failed', completed: 0, failed: failedCount, total: items.length },
         });
+        autoSaveSession(db, runId, repoRoot);
         return;
       }
 
@@ -226,6 +247,7 @@ async function main() {
             evalRound,
           },
         });
+        autoSaveSession(db, runId, repoRoot);
         return;
       }
 
@@ -240,7 +262,7 @@ async function main() {
         metadata: { evaluationRound: evalRound, maxEvalRounds },
       });
 
-      const evalPrompt = composeEvaluatorPrompt(run, items, rulesDoc?.text || null);
+      const evalPrompt = await composeEvaluatorPrompt(run, items, rulesDoc?.text || null, wsPath);
       const evalResult = await launchWorkerAndWaitForResult(
         clientContext,
         run,
@@ -285,6 +307,7 @@ async function main() {
           content: resultSummary,
           metadata: { status: 'completed', evalRound, verdict: verdictType },
         });
+        autoSaveSession(db, runId, repoRoot);
         return;
       }
 
@@ -304,6 +327,7 @@ async function main() {
           content: resultSummary,
           metadata: { status: 'failed', evalRound, verdict: verdictType },
         });
+        autoSaveSession(db, runId, repoRoot);
         return;
       }
 
@@ -356,6 +380,7 @@ async function main() {
           },
         });
       }
+      autoSaveSession(dbForError, runId, repoRoot);
     } finally {
       dbForError.close();
     }

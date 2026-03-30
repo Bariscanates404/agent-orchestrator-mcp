@@ -150,3 +150,20 @@ export function getTaskStatusCounts(db, repoRoot) {
     return acc;
   }, {});
 }
+
+export function countActiveTasks(db, repoRoot) {
+  const row = db
+    .prepare("SELECT COUNT(*) AS cnt FROM tasks WHERE repo_root = ? AND status IN ('queued','preparing','running')")
+    .get(repoRoot);
+  return row?.cnt || 0;
+}
+
+export function listStaleTasks(db, repoRoot, maxIdleMs) {
+  const cutoff = new Date(Date.now() - maxIdleMs).toISOString();
+  return db
+    .prepare(
+      "SELECT * FROM tasks WHERE repo_root = ? AND status IN ('queued','preparing','running') AND updated_at < ? ORDER BY updated_at ASC",
+    )
+    .all(repoRoot, cutoff)
+    .map(normalizeTaskRow);
+}

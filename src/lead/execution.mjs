@@ -1,5 +1,5 @@
 import { insertLeadRunEvent, listLeadRunItems, upsertLeadRunItem } from '../db/index.mjs';
-import { shortenText } from '../lib/index.mjs';
+import { appendToWorkspace, shortenText } from '../lib/index.mjs';
 import { TASK_TERMINAL_STATES } from '../shared/constants.mjs';
 import { unwrapToolResult } from '../shared/mcp-result.mjs';
 import { nowIso } from '../shared/time.mjs';
@@ -58,7 +58,7 @@ export async function launchWorkerAndWaitForResult(clientContext, run, prompt, l
   }
 }
 
-export async function executeItems(db, clientContext, run, rulesDoc, runId, repoRoot, pollMs) {
+export async function executeItems(db, clientContext, run, rulesDoc, runId, repoRoot, pollMs, wsPath) {
   const items = listLeadRunItems(db, runId);
   const pending = items
     .filter((item) => item.status === 'pending' || item.status === 'queued')
@@ -73,6 +73,7 @@ export async function executeItems(db, clientContext, run, rulesDoc, runId, repo
       rulesText: rulesDoc?.text || null,
       round,
       previousOutcome: job.retry,
+      wsPath,
     });
 
     const launch = await clientContext.client.callTool({
@@ -113,12 +114,41 @@ export async function executeItems(db, clientContext, run, rulesDoc, runId, repo
     active.set(updatedItem.taskIndex, updatedItem);
   }
 
+  const maxParallel = run.maxParallel || 3;
+  const LAUNCH_STAGGER_MS = 2000; // 2s gap between launches to avoid API rate spikes
+  let waveNumber = 0;
+
   while (pending.length > 0 || active.size > 0) {
     await waitWhilePaused(db, runId, pollMs);
 
-    while (pending.length > 0 && active.size < (run.maxParallel || 3)) {
+    // Launch a wave of tasks up to maxParallel slots
+    const launchedThisWave = [];
+    while (pending.length > 0 && active.size < maxParallel) {
       const next = pending.shift();
       await launchOne(next);
+      launchedThisWave.push(next.label || `item-${next.taskIndex + 1}`);
+      // Stagger launches to prevent API rate spikes
+      if (pending.length > 0 && active.size < maxParallel) {
+        await new Promise((resolve) => setTimeout(resolve, LAUNCH_STAGGER_MS));
+      }
+    }
+
+    // Log wave info
+    if (launchedThisWave.length > 0) {
+      waveNumber++;
+      insertLeadRunEvent(db, {
+        runId,
+        repoRoot,
+        eventType: 'execution_wave',
+        content: `Dalga ${waveNumber}: ${launchedThisWave.length} isci baslatildi (toplam aktif: ${active.size}).`,
+        metadata: {
+          wave: waveNumber,
+          launched: launchedThisWave.length,
+          activeCount: active.size,
+          pendingCount: pending.length,
+          labels: launchedThisWave,
+        },
+      });
     }
 
     for (const [taskIndex, runningItem] of [...active.entries()]) {
@@ -161,6 +191,14 @@ export async function executeItems(db, clientContext, run, rulesDoc, runId, repo
           error: errorText,
         },
       });
+
+      if (wsPath) {
+        await appendToWorkspace(wsPath, {
+          agentLabel: runningItem.label || `item-${taskIndex + 1}`,
+          type: workerTask.status === 'completed' ? 'result' : 'error',
+          content: resultText || errorText || '',
+        });
+      }
 
       if (workerTask.status !== 'completed' && finalized.round < (run.maxRounds || 2)) {
         const retryItem = updateItem(db, finalized, {
