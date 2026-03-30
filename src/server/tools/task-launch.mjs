@@ -4,6 +4,7 @@ import {
   buildTaskPaths,
   detectBackend,
   ensureRepoStatePaths,
+  initTaskWorkspace,
   makeTaskId,
   sanitizeName,
   summarizePrompt,
@@ -72,6 +73,7 @@ async function createTaskRecord(rawTask, { repoRoot, stateRoot, runnerPath }) {
     profile: rawTask.profile || null,
     additionalArgs: rawTask.additionalArgs || [],
     systemPrompt: rawTask.systemPrompt || null,
+    resumeSessionId: rawTask.resumeSessionId || null,
     allowDirtyBase: Boolean(rawTask.allowDirtyBase),
     createdAt: now,
     updatedAt: now,
@@ -98,7 +100,19 @@ async function createTaskRecord(rawTask, { repoRoot, stateRoot, runnerPath }) {
       created: false,
     },
     execution: null,
+    workspacePath: null,
   };
+
+  // Create session workspace JSON for this task
+  try {
+    task.workspacePath = await initTaskWorkspace(taskId, effectiveCwd, {
+      label: task.label,
+      prompt: rawTask.task,
+      backend: rawTask.backend,
+    });
+  } catch {
+    // Non-fatal — workspace is helpful but not required
+  }
 
   await writeJsonAtomic(paths.taskFile, task);
 
@@ -159,6 +173,10 @@ const taskInputSchema = z
     effort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     profile: z.string().optional(),
     branchName: z.string().optional(),
+    resumeSessionId: z
+      .string()
+      .optional()
+      .describe('Claude session ID to resume. Continues the previous conversation context.'),
     parentTaskId: z.string().optional(),
     escalationReason: z.string().optional(),
     systemPrompt: z.string().optional(),

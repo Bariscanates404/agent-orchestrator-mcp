@@ -34,6 +34,7 @@ function normalizeTaskRow(row) {
     },
     logs: parseJson(row.logs_json),
     execution: parseJson(row.execution_json),
+    workspacePath: row.workspace_path || null,
   };
 }
 
@@ -43,12 +44,12 @@ export function upsertTask(db, task) {
       id, repo_root, state_root, label, requested_backend, backend, fallback_backend, fallback_used,
       prompt, prompt_summary, status, created_at, updated_at, started_at, completed_at,
       exit_code, exit_signal, runner_pid, agent_pid, error, parent_task_id, escalation_reason,
-      worktree_mode, worktree_path, worktree_branch, logs_json, execution_json
+      worktree_mode, worktree_path, worktree_branch, logs_json, execution_json, workspace_path
     ) VALUES (
       @id, @repo_root, @state_root, @label, @requested_backend, @backend, @fallback_backend, @fallback_used,
       @prompt, @prompt_summary, @status, @created_at, @updated_at, @started_at, @completed_at,
       @exit_code, @exit_signal, @runner_pid, @agent_pid, @error, @parent_task_id, @escalation_reason,
-      @worktree_mode, @worktree_path, @worktree_branch, @logs_json, @execution_json
+      @worktree_mode, @worktree_path, @worktree_branch, @logs_json, @execution_json, @workspace_path
     )
     ON CONFLICT(id) DO UPDATE SET
       repo_root = excluded.repo_root,
@@ -75,7 +76,8 @@ export function upsertTask(db, task) {
       worktree_path = excluded.worktree_path,
       worktree_branch = excluded.worktree_branch,
       logs_json = excluded.logs_json,
-      execution_json = excluded.execution_json
+      execution_json = excluded.execution_json,
+      workspace_path = excluded.workspace_path
   `).run({
     id: task.id,
     repo_root: task.repoRoot,
@@ -104,6 +106,7 @@ export function upsertTask(db, task) {
     worktree_branch: task.worktree?.branch || null,
     logs_json: json(task.logs),
     execution_json: json(task.execution),
+    workspace_path: task.workspacePath || null,
   });
 }
 

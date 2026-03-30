@@ -1432,6 +1432,16 @@ function renderTaskDetail(task, events, payload) {
       </div>
     </div>
     ${exec ? '<div class="detail-section"><div class="card"><div class="card-title" style="margin-bottom:8px;">Calistirma Bilgisi</div><div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;">'+(exec.command?'<div class="hint">Komut: <span class="mono">'+esc(exec.command)+'</span></div>':'')+(exec.model?'<div class="hint">Model: <strong>'+esc(exec.model)+'</strong></div>':'')+(exec.effort?'<div class="hint">Effor: <strong>'+esc(exec.effort)+'</strong></div>':'')+'</div></div></div>' : ''}
+    ${task.workspacePath ? `
+    <div class="detail-section"><div class="card">
+      <div class="card-title" style="margin-bottom:8px;">Session Workspace</div>
+      <div class="hint" style="margin-bottom:6px;">Bu gorev icin olusturulan JSON workspace dosyasi. Diger AI'larla veya takim arkadaslarinizla paylasabilirsiniz.</div>
+      <div class="mono" style="font-size:11px;color:var(--text-secondary);padding:6px 8px;background:var(--bg-primary);border-radius:4px;margin-bottom:8px;word-break:break-all;">${esc(task.workspacePath)}</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" id="tdCopyWsPath" data-tip="Workspace dosya yolunu panoya kopyalar. Baska AI'a veya terminale yapistirmak icin.">Dosya Yolunu Kopyala</button>
+        <button class="btn btn-sm" id="tdCopyWsJson" data-tip="Workspace JSON icerigini panoya kopyalar. Takim arkadaslarina veya baska AI sohbetine yapistirmak icin.">JSON Icerigini Kopyala</button>
+      </div>
+    </div></div>` : ''}
     <div class="detail-section">
       <div class="card">
         <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
@@ -1445,6 +1455,18 @@ function renderTaskDetail(task, events, payload) {
   $('tdEscalate')?.addEventListener('click', () => openEscalationModal(task));
   $('tdCancel')?.addEventListener('click', () => cancelTask(task));
   $('tdCleanup')?.addEventListener('click', () => cleanupTask(task));
+  $('tdCopyWsPath')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(task.workspacePath).then(() => showSuccess('Dosya yolu kopyalandi!')).catch(e => showError(e));
+  });
+  $('tdCopyWsJson')?.addEventListener('click', async () => {
+    try {
+      const resp = await fetch('/api/workspace?path=' + encodeURIComponent(task.workspacePath));
+      if(!resp.ok) throw new Error('Workspace okunamadi');
+      const data = await resp.json();
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      showSuccess('JSON icerik kopyalandi! (' + JSON.stringify(data).length + ' karakter)');
+    } catch(e) { showError(e); }
+  });
   $('tdResume')?.addEventListener('click', async () => {
     const msg = $('tdFollowUp')?.value?.trim();
     if(!msg) { showError(new Error('Bir follow-up mesaj yazin.')); return; }
@@ -1621,6 +1643,15 @@ function renderLeadRunDetail(run, items, events) {
       }).join('') || '<div class="hint">Henuz alt gorev yok.</div>'}
     </div></div>
     <div class="detail-section"><div class="card">
+      <div class="card-title" style="margin-bottom:8px;">Session Workspace</div>
+      <div class="hint" style="margin-bottom:6px;">Bu oturum icin paylasilan JSON. Tum alt iscilerin sonuclari burada toplanir. Diger AI'larla paylasabilirsiniz.</div>
+      <div class="mono" style="font-size:11px;color:var(--text-secondary);padding:6px 8px;background:var(--bg-primary);border-radius:4px;margin-bottom:8px;word-break:break-all;">.orchestrator-sessions/${esc(run.id)}/workspace.json</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" id="ldCopyWsPath" data-tip="Workspace dosya yolunu panoya kopyalar.">Dosya Yolunu Kopyala</button>
+        <button class="btn btn-sm" id="ldCopyWsJson" data-tip="Workspace JSON icerigini panoya kopyalar.">JSON Icerigini Kopyala</button>
+      </div>
+    </div></div>
+    <div class="detail-section"><div class="card">
       <div class="card-title" style="margin-bottom:8px;">Olaylar (${events.length})</div>
       <div class="event-list">
         ${events.map(ev => '<div class="event-item system"><div class="event-meta">#'+ev.id+' &middot; '+esc(ev.eventType)+' &middot; '+fmtTime(ev.createdAt)+'</div><pre class="pre">'+fmtEventContent(ev.content, ev.eventType, ev.metadata)+'</pre></div>').join('') || '<div class="hint">Henuz olay yok.</div>'}
@@ -1632,6 +1663,21 @@ function renderLeadRunDetail(run, items, events) {
   $('ldResume')?.addEventListener('click', () => leadAction(run.id, 'resume'));
   $('ldCancel')?.addEventListener('click', () => leadAction(run.id, 'cancel'));
   $('ldAddItem')?.addEventListener('click', () => openAddItemModal(run.id));
+  const ldWsRelPath = '.orchestrator-sessions/'+run.id+'/workspace.json';
+  $('ldCopyWsPath')?.addEventListener('click', () => {
+    const fullPath = (run.repoRoot||'') + '/' + ldWsRelPath;
+    navigator.clipboard.writeText(fullPath).then(() => showSuccess('Dosya yolu kopyalandi!')).catch(e => showError(e));
+  });
+  $('ldCopyWsJson')?.addEventListener('click', async () => {
+    try {
+      const fullPath = (run.repoRoot||'') + '/' + ldWsRelPath;
+      const resp = await fetch('/api/workspace?path=' + encodeURIComponent(fullPath));
+      if(!resp.ok) throw new Error('Workspace okunamadi');
+      const data = await resp.json();
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      showSuccess('JSON icerik kopyalandi! (' + JSON.stringify(data).length + ' karakter)');
+    } catch(e) { showError(e); }
+  });
 
   // Continue (reopen) handler for terminal lead runs
   $('ldContinue')?.addEventListener('click', async () => {

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import fsPromises from 'node:fs/promises';
 import { insertTaskEvent, openDb, upsertTask } from '../db/index.mjs';
-import { pathExists, readJson, updateJsonFile, writeJsonAtomic } from '../lib/index.mjs';
+import { appendToWorkspace, pathExists, readJson, updateJsonFile, writeJsonAtomic } from '../lib/index.mjs';
 import { nowIso } from '../shared/time.mjs';
 import { buildClaudeArgs, buildCodexArgs } from './agents.mjs';
 import { bindProcessStreams, closeStreams } from './streams.mjs';
@@ -122,17 +122,34 @@ async function main() {
 
   await closeStreams(streams?.stdoutStream, streams?.stderrStream);
 
+  const finalStatus = classifyExit(code, signal);
   await updateTask(
     {
-      status: classifyExit(code, signal),
+      status: finalStatus,
       completedAt: nowIso(),
       exitCode: code,
       exitSignal: signal,
       agentPid: null,
     },
     'status_changed',
-    classifyExit(code, signal),
+    finalStatus,
   );
+
+  // Write final result to session workspace
+  if (currentTaskSnapshot?.workspacePath) {
+    try {
+      await appendToWorkspace(currentTaskSnapshot.workspacePath, {
+        agentLabel: currentTaskSnapshot.label || currentTaskSnapshot.id,
+        type: finalStatus === 'completed' ? 'result' : 'error',
+        content:
+          finalStatus === 'completed'
+            ? `Task completed successfully (exit code ${code}).`
+            : `Task ${finalStatus} (exit code: ${code}, signal: ${signal || 'none'}).${currentTaskSnapshot.error ? ' Error: ' + currentTaskSnapshot.error : ''}`,
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }
 }
 
 process.on('SIGTERM', () => {

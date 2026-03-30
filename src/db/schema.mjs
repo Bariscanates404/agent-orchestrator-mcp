@@ -152,5 +152,6 @@ export function openDb(stateRoot) {
   ensureColumn(db, 'lead_runs', 'evaluation_task_id', 'TEXT');
   ensureColumn(db, 'lead_runs', 'evaluation_round', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'lead_runs', 'max_eval_rounds', 'INTEGER DEFAULT 2');
+  ensureColumn(db, 'tasks', 'workspace_path', 'TEXT');
   return db;
 }

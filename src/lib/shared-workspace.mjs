@@ -4,6 +4,7 @@ import { pathExists, readJson, writeJsonAtomic } from './fs.mjs';
 import { shortenText } from './text.mjs';
 
 const SESSIONS_DIR = '.orchestrator-sessions';
+const TASKS_SESSIONS_DIR = '.orchestrator-sessions/tasks';
 
 // Limits — prevents workspace from eating agent context
 const MAX_RECENT_ENTRIES = 15; // Keep last 15 entries in full detail
@@ -13,6 +14,28 @@ const MAX_WORKSPACE_JSON_BYTES = 32_000; // Hard cap ~32KB on disk
 
 export function workspacePath(repoRoot, runId) {
   return path.join(repoRoot, SESSIONS_DIR, runId, 'workspace.json');
+}
+
+export function taskWorkspacePath(repoRoot, taskId) {
+  return path.join(repoRoot, TASKS_SESSIONS_DIR, taskId, 'workspace.json');
+}
+
+export async function initTaskWorkspace(taskId, repoRoot, { label, prompt, backend } = {}) {
+  const filePath = taskWorkspacePath(repoRoot, taskId);
+  const data = {
+    version: 2,
+    type: 'task',
+    taskId,
+    label: label || taskId,
+    backend: backend || null,
+    prompt: shortenText(prompt || '', 500),
+    createdAt: nowIso(),
+    compactedHistory: '',
+    compactedCount: 0,
+    entries: [],
+  };
+  await writeJsonAtomic(filePath, data);
+  return filePath;
 }
 
 export async function initWorkspace(runId, repoRoot) {

@@ -12,5 +12,14 @@ export {
   taskFilePath,
 } from './paths.mjs';
 export { requireCommand, runCommand, spawnAndWait } from './process.mjs';
+export {
+  appendToWorkspace,
+  getWorkspaceSummary,
+  initTaskWorkspace,
+  initWorkspace,
+  readWorkspace,
+  taskWorkspacePath,
+  workspacePath,
+} from './shared-workspace.mjs';
 export { buildDashboardState, getTaskSummary, listStoredTasks } from './tasks.mjs';
 export { sanitizeName, shortenText, summarizePrompt } from './text.mjs';

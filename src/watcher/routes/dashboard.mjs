@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { openDb, updateSettings } from '../../db/index.mjs';
-import { discoverBackends, ensureRepoStatePaths, getGitOverview } from '../../lib/index.mjs';
+import { discoverBackends, ensureRepoStatePaths, getGitOverview, readWorkspace } from '../../lib/index.mjs';
 import { getRuntimeSettings } from '../../shared/settings.mjs';
 import { readBody, sendHtml, sendJson } from '../http-helpers.mjs';
 import { buildDashboardPayload } from '../payloads.mjs';
@@ -56,6 +56,24 @@ export function registerDashboardRoutes(router, { publicDir, repoRoot, stateRoot
       // .mcp.json not found or invalid — return empty list
     }
     return sendJson(res, 200, { plugins });
+  });
+
+  router.get('/api/workspace', async (_req, res, url) => {
+    const wsPath = url.searchParams.get('path');
+    if (!wsPath) {
+      return sendJson(res, 400, { error: 'path query parameter is required' });
+    }
+    // Security: only allow reading from .orchestrator-sessions directories
+    const normalized = path.resolve(wsPath);
+    if (!normalized.includes('.orchestrator-sessions')) {
+      return sendJson(res, 403, { error: 'Access denied: only workspace files can be read' });
+    }
+    try {
+      const data = await readWorkspace(normalized);
+      return sendJson(res, 200, data);
+    } catch (e) {
+      return sendJson(res, 404, { error: 'Workspace not found: ' + e.message });
+    }
   });
 
   router.get('/api/doctor', async (_req, res) => {
