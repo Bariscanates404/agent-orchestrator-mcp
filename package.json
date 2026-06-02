@@ -4,6 +4,9 @@
   "type": "module",
   "version": "0.1.0",
   "description": "Reusable MCP server for orchestrating Codex and Claude CLI agents in isolated worktrees",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node bin/server.mjs",
     "doctor": "node bin/doctor.mjs",

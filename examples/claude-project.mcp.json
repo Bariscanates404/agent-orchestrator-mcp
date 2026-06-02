@@ -4,11 +4,11 @@
       "type": "stdio",
       "command": "node",
       "args": [
-        "/Users/bariscanates/tbproject/agent-orchestrator-mcp/server.mjs"
+        "/absolute/path/to/agent-orchestrator-mcp/bin/server.mjs"
       ],
       "env": {
         "TEAMLEAD_REPO_ROOT": "/absolute/path/to/project",
-        "TEAMLEAD_STATE_ROOT": "/Users/bariscanates/.codex/agent-orchestrator"
+        "TEAMLEAD_STATE_ROOT": "${userHome}/.codex/agent-orchestrator"
       }
     }
   }

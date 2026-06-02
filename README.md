@@ -1,199 +1,75 @@
-# Agent Orchestrator MCP
+# 🤖 Agent Orchestrator MCP
 
-Reusable MCP server for running Claude Code and Codex CLI workers as parallel coding agents across multiple repositories.
+> An MCP server that runs **Claude Code** and **Codex CLI** as parallel coding agents, isolated in git worktrees, coordinated by a lead planner agent, and observable from a live dashboard.
 
-## Purpose
+![Node](https://img.shields.io/badge/node-%E2%89%A522.5-3c873a)
+![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-server-6e56cf)
+![Style](https://img.shields.io/badge/style-Biome-60a5fa)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-This project is the shared orchestration layer.
-It should live outside any single application repo.
+Agent Orchestrator MCP turns your terminal coding agents into a small autonomous team. A **lead** agent breaks a goal into tasks, **worker** agents (Claude or Codex) execute them in parallel inside isolated `git worktree`s, and everything (logs, status, events) is persisted locally in SQLite and streamed to a browser dashboard in real time.
 
-It can:
-- launch `claude` or `codex` worker tasks
-- isolate coding tasks with `git worktree`
-- persist logs and task state under `~/.codex/agent-orchestrator`
-- let a lead agent inspect, cancel, and clean up worker tasks
-- persist task/event history in local SQLite for watcher UIs
-- expose a local watcher screen for live task monitoring
-- run multi-round lead orchestration (plan → execute → evaluate)
+It speaks the [Model Context Protocol](https://modelcontextprotocol.io), so any MCP client (Claude Code, VS Code, and others) can drive it.
 
-## Architecture
+## ✨ Why
 
-Feature-sliced modular structure — 61 modules under `src/` + `bin/`:
+Running one coding agent at a time is slow, and running several by hand is chaos: clashing branches, lost logs, no overview. This server gives you:
+
+- **Parallelism without conflicts.** Each task runs in its own `git worktree`, so agents never step on each other.
+- **A lead/worker loop.** A planner agent decomposes a goal, dispatches workers, evaluates results, and iterates (plan → execute → evaluate).
+- **Full observability.** Live per-task stdout/stderr/status over SSE, persisted to SQLite, viewable in a TUI or browser.
+- **Backend choice.** Mix Claude Code and Codex workers, with automatic fallback when one is unavailable.
+
+## 🚀 Features
+
+- 🧑‍✈️ **Lead orchestration**: multi-round plan/execute/evaluate runs you can pause, resume, and cancel
+- 🌳 **Worktree isolation**: safe parallel edits; dirty-repo launches fail closed by default
+- 🔀 **Multi-backend**: `claude` or `codex` per task, with configurable fallback
+- 📊 **Live dashboard**: HTTP + SSE watcher UI on `:4317`, plus a terminal TUI
+- 🗃️ **Local-first state**: tasks, events, and lead runs in the built-in `node:sqlite`, no external DB
+- 🧰 **16 MCP tools**: launch, inspect, escalate, and clean up tasks and lead runs
+- 🪶 **No stored secrets**: auth is delegated to the `claude`/`codex` CLIs; the server keeps no API keys
+
+## 🛠 How it works
 
 ```
-agent-orchestrator-mcp/
-  bin/                          Thin 2-line entry points
-    server.mjs                  MCP server
-    runner.mjs                  Task runner subprocess
-    lead-runner.mjs             Lead runner subprocess
-    watcher.mjs                 HTTP dashboard server
-    doctor.mjs / smoke.mjs      Health check / smoke test
-    dashboard.mjs               TUI dashboard
-    demo-claude-batch.mjs       Demo script
-
-  src/
-    shared/                     Cross-cutting modules
-      constants.mjs             Status enums, terminal states, event types, verdicts
-      time.mjs                  nowIso()
-      mcp-result.mjs            toTextResult(), unwrapToolResult()
-      spawn-detached.mjs        Detached subprocess helper
-      settings.mjs              getRuntimeSettings()
-      db-scope.mjs              withDb() open-try-finally-close helper
-
-    db/                         SQLite layer (split from original 634-line db.mjs)
-      schema.mjs                openDb(), ensureColumn(), DDL
-      tasks.mjs                 upsertTask, getTaskById, listTasksForRepo, getTaskStatusCounts
-      events.mjs                insertTaskEvent, listTaskEvents, listRepoEvents
-      lead-runs.mjs             upsertLeadRun, getLeadRunById, listLeadRunsForRepo
-      lead-run-items.mjs        upsertLeadRunItem, listLeadRunItems, getLeadRunItemsByStatus
-      lead-run-events.mjs       insertLeadRunEvent, listLeadRunEvents
-      settings.mjs              getSettings, updateSettings
-      index.mjs                 Barrel re-export
-
-    lib/                        Domain-agnostic utilities
-      paths.mjs                 resolveRepoRoot, resolveStateRoot, buildTaskPaths, taskFilePath
-      git.mjs                   gitCommand, getGitOverview
-      backend.mjs               detectBackend, discoverBackends
-      text.mjs                  shortenText, summarizePrompt, sanitizeName
-      ids.mjs                   makeTaskId, repoSlug
-      fs.mjs                    readJson, writeJsonAtomic, pathExists, readTail
-      process.mjs               runCommand, requireCommand, spawnAndWait
-      parse-output.mjs          parseClaudeResult, parseCodexResult
-      tasks.mjs                 getTaskSummary, buildDashboardState
-      index.mjs                 Barrel re-export
-
-    server/                     MCP server (split from original 1069-line server.mjs)
-      index.mjs                 McpServer setup + tool registration + transport
-      tools/
-        doctor.mjs              orchestrator_doctor
-        task-launch.mjs         launch_agent_task, launch_agent_batch
-        task-inspect.mjs        get_agent_task, list_agent_tasks, get_dashboard_snapshot
-        task-lifecycle.mjs      escalate_agent_task, cancel_agent_task, cleanup_agent_task
-        lead-run.mjs            create_lead_run, get_lead_run, list_lead_runs
-        lead-run-lifecycle.mjs  pause/resume/cancel_lead_run, add_lead_run_item
-
-    runner/                     Task runner subprocess
-      index.mjs                 main() + signal handlers
-      agents.mjs                buildClaudeArgs, buildCodexArgs
-      worktree.mjs              prepareWorktree
-      streams.mjs               bindProcessStreams, closeStreams
-
-    lead/                       Lead runner subprocess (plan → execute → evaluate)
-      runner.mjs                main() 3-phase loop
-      prompts.mjs               composePlannerPrompt, composeEvaluatorPrompt
-      execution.mjs             executeItems, launchWorkerAndWaitForResult
-      pause.mjs                 checkPaused, waitWhilePaused
-
-    watcher/                    HTTP dashboard server
-      server.mjs                http.createServer + Router + route dispatch
-      routes/
-        dashboard.mjs           GET /, /api/dashboard, /api/settings
-        tasks.mjs               /api/tasks/* endpoints
-        leads.mjs               /api/leads/* endpoints
-        stream.mjs              GET /api/stream (SSE)
-      http-helpers.mjs          sendJson, sendHtml, sendSse, readBody
-      payloads.mjs              buildDashboardPayload, buildLeadRunsPayload
-      mcp-proxy.mjs             withOrchestratorClient + proxy functions
-
-    client/                     MCP client helper
-      index.mjs                 connectOrchestratorClient, closeOrchestratorClient
-
-    cli/                        CLI scripts
-      doctor.mjs / smoke.mjs    Health check / integration test
-      dashboard.mjs             TUI dashboard
-      demo-claude-batch.mjs     Demo batch launch
-
-  public/
-    index.html                  Dashboard UI
-
-  examples/
-    claude-project.mcp.json     Example Claude project config
-    vscode-mcp.json             Example VS Code config
+                 ┌─────────────────────────────────────────────┐
+   MCP client    │             Agent Orchestrator MCP          │
+ (Claude Code,   │                                             │
+  VS Code, ...)  │   lead run ──► plan ─► execute ─► evaluate   │
+       │         │                          │                   │
+       ▼         │                          ▼                   │
+   stdio  ◄──────┤   worker tasks  ─►  git worktree (isolated)  │
+                 │        │                                      │
+                 │        ▼                                      │
+                 │   SQLite state  ─►  HTTP + SSE dashboard      │
+                 └─────────────────────────────────────────────┘
 ```
 
-## Commands
+## 📋 Prerequisites
+
+- **Node.js 22.5+** (uses the built-in `node:sqlite`; Node 24+ recommended)
+- At least one agent CLI installed and authenticated:
+  - [Claude Code](https://claude.com/claude-code) (`claude`)
+  - and/or Codex CLI (`codex`)
+- `git` (for worktree isolation)
+
+## ⚡ Quick start
 
 ```bash
+git clone https://github.com/Bariscanates404/agent-orchestrator-mcp.git
+cd agent-orchestrator-mcp
 npm install
-npm run doctor          # Health check
-npm run smoke           # Integration smoke test
-npm run dashboard       # TUI dashboard
-npm run demo:claude     # Demo Claude batch launch
-npm run watch           # HTTP dashboard on :4317
-npm start               # Start MCP server (stdio)
+
+npm run doctor      # verify Node, git, and detected agent backends
+npm run watch       # open the dashboard on http://localhost:4317
 ```
 
-## Quality Gates
+To use it as an MCP server from a client, point the client at `bin/server.mjs` (see below).
 
-- **Biome.js** for linting + formatting — single quotes, trailing commas, semicolons, 120 char width
-- **Pre-commit hook** via `simple-git-hooks` + `lint-staged` — auto-runs `biome check --write` on staged `.mjs` files
-- Run `npm run check` to verify lint status, `npm run lint:fix` to auto-fix
+## 🔌 Connect an MCP client
 
-## Runtime Policy
-
-- Lead backend preference is stored in SQLite and shown in the watcher UI
-- Default worker backend should normally be `claude`
-- If a task explicitly requests `codex` and Codex is unavailable, fallback can route it to `claude`
-
-## Watcher UI
-
-Start the watcher:
-
-```bash
-TEAMLEAD_REPO_ROOT=/absolute/path/to/project npm run watch
-```
-
-Then open:
-
-```text
-http://localhost:4317
-```
-
-The first screen lets you choose:
-- lead developer/orchestrator backend
-- default worker backend
-- Codex fallback backend
-
-The watcher can also:
-- launch ad-hoc worker tasks from the browser
-- show live per-task stdout/stderr/status events over SSE
-- cancel or clean up tasks
-- escalate a Claude task into a Codex task while preserving parent task linkage
-- manage lead runs (create, pause, resume, cancel, add items)
-
-The watcher stores everything in local SQLite:
-- DB file: `~/.codex/agent-orchestrator/orchestrator.db`
-- Task files/logs/reports: `~/.codex/agent-orchestrator/<repo-slug>/...`
-
-Useful options:
-
-```bash
-ORCHESTRATOR_WATCHER_PORT=4318 TEAMLEAD_REPO_ROOT=/absolute/path/to/project npm run watch
-```
-
-## Consumer Project Config
-
-### VS Code workspace `.vscode/mcp.json`
-
-```json
-{
-  "servers": {
-    "agent-orchestrator": {
-      "type": "stdio",
-      "command": "node",
-      "args": [
-        "/Users/bariscanates/tbproject/agent-orchestrator-mcp/bin/server.mjs"
-      ],
-      "env": {
-        "TEAMLEAD_REPO_ROOT": "${workspaceFolder}",
-        "TEAMLEAD_STATE_ROOT": "${userHome}/.codex/agent-orchestrator"
-      }
-    }
-  }
-}
-```
-
-### Claude project `.mcp.json`
+### Claude Code / Claude project (`.mcp.json`)
 
 ```json
 {
@@ -201,27 +77,103 @@ ORCHESTRATOR_WATCHER_PORT=4318 TEAMLEAD_REPO_ROOT=/absolute/path/to/project npm 
     "agent-orchestrator": {
       "type": "stdio",
       "command": "node",
-      "args": [
-        "/Users/bariscanates/tbproject/agent-orchestrator-mcp/bin/server.mjs"
-      ],
+      "args": ["/absolute/path/to/agent-orchestrator-mcp/bin/server.mjs"],
       "env": {
-        "TEAMLEAD_REPO_ROOT": "/absolute/path/to/project",
-        "TEAMLEAD_STATE_ROOT": "/Users/bariscanates/.codex/agent-orchestrator"
+        "TEAMLEAD_REPO_ROOT": "/absolute/path/to/your/project"
       }
     }
   }
 }
 ```
 
-> **Note:** Root `server.mjs` is kept as a backward-compatible wrapper for existing configs.
-> New configs should use `bin/server.mjs` as the canonical entry point.
+### VS Code (`.vscode/mcp.json`)
 
-### Codex global MCP
+```json
+{
+  "servers": {
+    "agent-orchestrator": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/agent-orchestrator-mcp/bin/server.mjs"],
+      "env": {
+        "TEAMLEAD_REPO_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}
+```
 
-The Codex global registration should point to this project, not to any app repo.
-The target repo is resolved from the client session cwd unless `TEAMLEAD_REPO_ROOT` is explicitly set.
+The target repo is resolved from the client session's working directory unless `TEAMLEAD_REPO_ROOT` is set. State defaults to `~/.codex/agent-orchestrator`.
 
-## Safety Rule
+## 🧰 MCP tools
 
-Use `git_worktree` for code-writing tasks.
-If the target repository is dirty, isolated launches fail by default.
+| Category | Tools |
+|---|---|
+| Health | `orchestrator_doctor` |
+| Tasks | `launch_agent_task`, `launch_agent_batch`, `get_agent_task`, `list_agent_tasks`, `get_dashboard_snapshot` |
+| Task lifecycle | `escalate_agent_task`, `cancel_agent_task`, `cleanup_agent_task` |
+| Lead runs | `create_lead_run`, `get_lead_run`, `list_lead_runs` |
+| Lead lifecycle | `pause_lead_run`, `resume_lead_run`, `cancel_lead_run`, `add_lead_run_item` |
+
+## 📊 Dashboard
+
+```bash
+TEAMLEAD_REPO_ROOT=/absolute/path/to/your/project npm run watch
+# then open http://localhost:4317
+```
+
+From the browser you can pick lead/worker/fallback backends, launch ad-hoc tasks, watch live stdout/stderr/status over SSE, cancel or clean up tasks, escalate a Claude task into a Codex task, and manage lead runs. Everything is stored locally:
+
+- DB: `~/.codex/agent-orchestrator/orchestrator.db`
+- Task logs/reports: `~/.codex/agent-orchestrator/<repo-slug>/...`
+
+## ⚙️ Configuration
+
+Copy `.env.example` and adjust as needed (all optional):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ORCHESTRATOR_WATCHER_PORT` | `4317` | Dashboard HTTP port |
+| `ORCHESTRATOR_DEFAULT_BACKEND` | `claude` | Default worker backend |
+| `ORCHESTRATOR_DEFAULT_LEAD` | `codex` | Default lead/planner backend |
+| `ORCHESTRATOR_CODEX_FALLBACK` | `claude` | Fallback when Codex is unavailable |
+| `TEAMLEAD_REPO_ROOT` | git-detected | Target repository |
+| `TEAMLEAD_STATE_ROOT` | `~/.codex/agent-orchestrator` | State/data directory |
+
+## 🏗 Architecture
+
+Feature-sliced ESM modules under `src/`, with thin `bin/` entry points:
+
+```
+bin/        Thin entry points: server, runner, lead-runner, watcher, doctor, dashboard
+src/
+  shared/   Constants, time, mcp-result, spawn helpers, settings, db-scope
+  db/       SQLite layer: tasks, events, lead-runs, lead-run-items, settings
+  lib/      Utilities: paths, git, backend detection, output parsing, fs, process
+  server/   MCP server + tools/
+  runner/   Worker task subprocess: agents, worktree, streams
+  lead/     Lead runner: plan → execute → evaluate
+  watcher/  HTTP + SSE dashboard: routes, payloads, mcp-proxy
+  client/   MCP client helper
+public/     Dashboard UI
+examples/   Example MCP client configs
+```
+
+## 🧑‍💻 Development
+
+```bash
+npm run check       # Biome lint
+npm run lint:fix    # Biome auto-fix
+npm run smoke       # integration smoke test
+```
+
+- **ESM only** (`.mjs`), **Biome** for lint/format (single quotes, trailing commas, 120 width, 2-space indent)
+- A pre-commit hook (`simple-git-hooks` + `lint-staged`) auto-formats staged files
+
+## 🛡 Safety
+
+Code-writing tasks should use worktree isolation. If the target repository is dirty, isolated launches fail by default, so an agent cannot clobber uncommitted work.
+
+## 📄 License
+
+[MIT](LICENSE) © Barış Can Ateş
