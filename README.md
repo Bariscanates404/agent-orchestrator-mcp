@@ -174,6 +174,34 @@ npm run smoke       # integration smoke test
 
 Code-writing tasks should use worktree isolation. If the target repository is dirty, isolated launches fail by default, so an agent cannot clobber uncommitted work.
 
+## 🗂 Contents
+
+| Path | Purpose |
+| --- | --- |
+| `bin/` | Thin entry points: `server`, `runner`, `lead-runner`, `watcher`, `dashboard`, `doctor`, `smoke`, `session-manager`, `demo-claude-batch` |
+| `src/` | Feature-sliced implementation (db, server, runner, lead, watcher, client, lib, shared, cli) |
+| `public/` | Dashboard UI (`index.html`) |
+| `examples/` | Example MCP client configs (Claude project, VS Code) |
+| `server.mjs` | Root server entry file |
+| `package.json` | Scripts (`start`, `doctor`, `smoke`, `watch`, `dashboard`, `lint`, `session:*`) |
+| `.env.example` | Names of supported environment variables (no values) |
+| `biome.json` | Lint/format rules |
+| `CLAUDE.md` | Notes for AI coding agents working in this repo |
+| `LICENSE` | MIT |
+
+## 🧱 Tech stack
+
+Node.js (>= 22.5, ESM only), built-in `node:sqlite`, Model Context Protocol server over stdio, HTTP + Server-Sent Events dashboard, Biome, `simple-git-hooks` + `lint-staged`.
+
+## 📌 Status
+
+Active personal project. Last commit 2026-06-03, 8 commits. Version 0.1.0 (package is marked private, not published to npm).
+
+## 🔗 Related repos
+
+None evident in the repository.
+
+
 ## 📄 License
 
 [MIT](LICENSE) © Barış Can Ateş
